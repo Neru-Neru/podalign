@@ -1,0 +1,27 @@
+podalign
+Copyright (C) 2026 podalign contributors
+
+This program is licensed under the GNU Affero General Public License v3.0
+(see LICENSE).
+
+Third-party components
+----------------------
+
+podalign itself does not link against any GPL library. All audio processing
+is performed by invoking `ffmpeg` as a subprocess.
+
+However, podalign REQUIRES an ffmpeg build with librubberband enabled
+(the `rubberband` audio filter) for clock-drift correction.
+
+  - Rubber Band Library (librubberband) is licensed under GPLv2+.
+    Source: https://github.com/breakfastquay/rubberband
+  - An ffmpeg binary built with `--enable-librubberband` is a GPL build
+    of ffmpeg as a whole. Source: https://ffmpeg.org/
+
+If you distribute a container image or bundle that includes such an ffmpeg
+binary (as the official podalign Docker image does), you must comply with
+the GPL for those components: state that they are included (this file),
+and provide access to their source code. The official Docker image uses
+the unmodified Debian packages of ffmpeg and librubberband; their exact
+corresponding sources are available from https://sources.debian.org/ and
+via `apt-get source ffmpeg rubberband` on the image's Debian release.

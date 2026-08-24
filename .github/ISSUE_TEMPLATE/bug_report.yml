@@ -1,0 +1,32 @@
+name: Bug report
+description: Something broke — a stage failed, sync verification warned, output sounds wrong
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, how you run podalign (Docker image / manual), and `ffmpeg -version` output if running manually
+      placeholder: |
+        - OS:
+        - Run via: Docker / manual
+        - ffmpeg -version:
+    validations:
+      required: true
+  - type: textarea
+    id: material
+    attributes:
+      label: Input material (if sync-related)
+      description: Recording length, devices/apps used to record, sample rates. Audio snippets welcome but never required.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error message
+      description: The stage error shown in the UI, or server logs
+      render: text
