@@ -3,6 +3,7 @@ export const ROLE_LABELS: Record<string, string> = { speaker_a: "話者A", speak
 type Role = typeof ROLES[number];
 type Reply = { type: "progress"; text: string } | { type: "ack" } | { type: "result"; wav: ArrayBuffer } | { type: "error"; message: string };
 
+/** Sends File handles to the worker; PCM is sliced there and never decoded wholesale. */
 export class BrowserPipeline {
   readonly worker = new Worker(new URL("./audioWorker.ts", import.meta.url), { type: "module" });
   private resolve: ((value: Reply) => void) | null = null;
@@ -16,26 +17,20 @@ export class BrowserPipeline {
     };
   }
   private wait(): Promise<Reply> { return new Promise((resolve, reject) => { this.resolve = resolve; this.reject = reject; }); }
-  private async send(role: Role, audio: AudioBuffer): Promise<Reply> {
-    const channels = Array.from({ length: audio.numberOfChannels }, (_, i) => audio.getChannelData(i).slice());
+  private async send(role: Role, file: File): Promise<Reply> {
     const reply = this.wait();
-    this.worker.postMessage({ type: "process", role, channels, sampleRate: audio.sampleRate }, channels.map(c => c.buffer));
+    this.worker.postMessage({ type: "process", role, file });
     return reply;
   }
   async run(files: Record<Role, File>): Promise<Blob> {
-    const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) throw new Error("このブラウザは Web Audio API に対応していません");
-    const ctx = new AudioCtx();
-    const decode = async (role: Role) => { this.onProgress(`${ROLE_LABELS[role]} をデコード中`); return ctx.decodeAudioData(await files[role].arrayBuffer()); };
-    try {
-      await this.send("reference", await decode("reference"));
-      await this.send("jingle", await decode("jingle"));
-      await this.send("bgm", await decode("bgm"));
-      await this.send("speaker_a", await decode("speaker_a"));
-      await this.send("speaker_b", await decode("speaker_b"));
-      const final = await this.send("speaker_c", await decode("speaker_c"));
-      if (final.type !== "result") throw new Error("Worker が出力を返しませんでした");
-      return new Blob([final.wav], { type: "audio/wav" });
-    } finally { await ctx.close(); }
+    for (const role of ROLES) if (!files[role]) throw new Error(`${ROLE_LABELS[role]}が未選択です`);
+    await this.send("reference", files.reference);
+    await this.send("jingle", files.jingle);
+    await this.send("bgm", files.bgm);
+    await this.send("speaker_a", files.speaker_a);
+    await this.send("speaker_b", files.speaker_b);
+    const final = await this.send("speaker_c", files.speaker_c);
+    if (final.type !== "result") throw new Error("Worker が出力を返しませんでした");
+    return new Blob([final.wav], { type: "audio/wav" });
   }
 }

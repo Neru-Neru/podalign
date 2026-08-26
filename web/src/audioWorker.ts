@@ -1,71 +1,23 @@
-import { ROLE_LABELS } from "./browserPipeline";
-
-type Process = { type: "process"; role: string; channels: Float32Array[]; sampleRate: number };
+type Role = string;
+type Job = { type: "process"; role: Role; file: File } | { type: "cancel" };
 let cancelled = false;
-let reference: Float32Array | null = null;
-let bgm: Float32Array | null = null;
-let jingle: Float32Array | null = null;
-let sampleRate = 48000;
-const speakers: Float32Array[] = [];
+let reference: { file: File; sr: number; channels: number; bits: number; data: number } | null = null;
+let bgm: { file: File; sr: number; channels: number; bits: number; data: number } | null = null;
+let jingle: { file: File; sr: number; channels: number; bits: number; data: number } | null = null;
+const outputs: Record<string, FileSystemFileHandle> = {};
 const post = (message: unknown, transfer: Transferable[] = []) => self.postMessage(message, { transfer });
 const progress = (text: string) => post({ type: "progress", text });
-const mono = (channels: Float32Array[]) => {
-  if (channels.length === 1) return channels[0];
-  const n = Math.min(...channels.map(c => c.length)); const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) for (const c of channels) out[i] += c[i] / channels.length;
-  return out;
-};
-const resample = (x: Float32Array, from: number, to: number) => {
-  if (from === to) return x;
-  const out = new Float32Array(Math.round(x.length * to / from));
-  for (let i = 0; i < out.length; i++) { const p = i * from / to, a = Math.floor(p), f = p - a; out[i] = (x[a] ?? 0) * (1 - f) + (x[a + 1] ?? 0) * f; }
-  return out;
-};
-const clean = (x: Float32Array) => {
-  const out = new Float32Array(x.length); let hp = 0, prev = 0;
-  for (let i = 0; i < x.length; i++) { hp = 0.995 * (hp + x[i] - prev); prev = x[i]; out[i] = Math.tanh(hp * 1.15); }
-  return out;
-};
-const rms = (x: Float32Array) => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / Math.max(1, x.length)); };
-const wav = (left: Float32Array, right: Float32Array, sr: number) => {
-  const n = Math.min(left.length, right.length), data = new ArrayBuffer(44 + n * 4), v = new DataView(data);
-  const put = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  put(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); put(8, "WAVE"); put(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 3, true); v.setUint16(22, 2, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 8, true); v.setUint16(32, 8, true); v.setUint16(34, 32, true); put(36, "data"); v.setUint32(40, n * 4, true);
-  for (let i = 0; i < n; i++) { v.setFloat32(44 + i * 4, Math.max(-1, Math.min(1, (left[i] + right[i]) * 0.5)), true); }
-  return data;
-};
-self.onmessage = (event: MessageEvent<Process | { type: "cancel" }>) => {
-  if (event.data.type === "cancel") { cancelled = true; return; }
-  const { role, channels, sampleRate: sr } = event.data; sampleRate = 48000;
-  try {
-    if (role === "reference") { reference = resample(mono(channels), sr, sampleRate); progress("リファレンスを準備しました"); post({ type: "ack" }); return; }
-    if (role === "bgm") { bgm = resample(mono(channels), sr, sampleRate); progress("BGMを準備しました"); post({ type: "ack" }); return; }
-    if (role === "jingle") { jingle = resample(mono(channels), sr, sampleRate); progress("ジングルを準備しました"); post({ type: "ack" }); return; }
-    if (!reference) throw new Error("リファレンスが未準備です");
-    const ref = reference;
-    const input = resample(mono(channels), sr, sampleRate);
-    progress(`${ROLE_LABELS[role] ?? role}: offset / drift 推定中`);
-    // Envelope correlation preserves the existing offset-first design without a main-thread FFT.
-    const step = 4800, limit = Math.min(input.length, ref.length), max = Math.min(24000, limit - step);
-    const scoreLag = (lag: number, start: number, width: number) => { let s = 0, count = 0; for (let i = start; i < Math.min(limit - width, start + width); i += 240) { const j = i + lag; if (j >= 0 && j < input.length) { s += Math.abs(input[j]) * Math.abs(ref[i]); count++; } } return s / Math.max(1, count); };
-    let best = -max, score = -Infinity;
-    for (let lag = -max; lag <= max; lag += step) { const value = scoreLag(lag, 0, Math.min(limit, sampleRate * 30)); if (value > score) { score = value; best = lag; } }
-    for (let lag = best - step; lag <= best + step; lag += 120) { const value = scoreLag(lag, 0, Math.min(limit, sampleRate * 60)); if (value > score) { score = value; best = lag; } }
-    // Two segment refinements estimate clock drift and avoid keeping a second full copy.
-    const t0 = Math.floor(limit * 0.2), t1 = Math.floor(limit * 0.8), radius = sampleRate * 2;
-    const refine = (center: number, t: number) => { let found = center, top = -Infinity; for (let lag = center - radius; lag <= center + radius; lag += 120) { const value = scoreLag(lag, Math.max(0, t - sampleRate * 10), sampleRate * 20); if (value > top) { top = value; found = lag; } } return found; };
-    const lag0 = refine(best, t0), lag1 = refine(best, t1), drift = (lag1 - lag0) / Math.max(1, t1 - t0);
-    progress(`${ROLE_LABELS[role] ?? role}: offset ${(best / sampleRate * 1000).toFixed(1)}ms / drift ${(drift * 1e6).toFixed(1)}ppm`);
-    const aligned = new Float32Array(reference.length);
-    for (let i = 0; i < aligned.length; i++) { const source = Math.round(i + best + drift * (i - t0)); aligned[i] = input[source] ?? 0; }
-    const processed = clean(aligned); speakers.push(processed);
-    if (speakers.length < 3) { post({ type: "ack" }); return; }
-    if (cancelled) throw new Error("キャンセルされました");
-    progress("mix: BGM ducking + master normalization");
-    const n = Math.min(reference.length, ...speakers.map(s => s.length)); const l = new Float32Array(n), r = new Float32Array(n);
-    const musicTrack = bgm ?? reference;
-    const gain = -16 / 20 * Math.log10(Math.max(1e-6, rms(speakers[0])));
-    for (let i = 0; i < n; i++) { if (cancelled) throw new Error("キャンセルされました"); const voice = (speakers[0][i] + speakers[1][i] + speakers[2][i]) / 3; const duck = Math.max(0.15, 1 - Math.min(0.85, Math.abs(voice) * 2)); const music = (musicTrack[i % musicTrack.length] ?? 0) * duck * 0.12; const intro = jingle && i < Math.min(jingle.length, sampleRate * 3) ? jingle[i] * 0.2 : 0; l[i] = (voice * 0.9 + music + intro) * gain; r[i] = (voice * 1.1 + music + intro) * gain; if (i % Math.max(1, Math.floor(n / 100)) === 0) progress(`mix / master ${Math.floor(i / n * 100)}%`); }
-    const output = wav(l, r, sampleRate); post({ type: "result", wav: output }, [output]);
-  } catch (e) { post({ type: "error", message: e instanceof Error ? e.message : String(e) }); }
-};
+function header(file: File) { return file.slice(0, 128 * 1024).arrayBuffer().then(b => { const v = new DataView(b); if (v.getUint32(0, false) !== 0x52494646 || v.getUint32(8, false) !== 0x57415645) throw new Error(`${file.name}: WAV/PCM入力のみ対応しています`); let p = 12, sr = 0, channels = 0, bits = 0, data = 0; while (p + 8 <= v.byteLength) { const id = v.getUint32(p, false), n = v.getUint32(p + 4, true); if (id === 0x666d7420) { channels = v.getUint16(p + 10, true); sr = v.getUint32(p + 12, true); bits = v.getUint16(p + 22, true); } if (id === 0x64617461) { data = p + 8; break; } p += 8 + n + (n & 1); } if (!sr || !channels || ![16, 24, 32].includes(bits) || !data) throw new Error(`${file.name}: PCM WAVを読み取れません`); return { file, sr, channels, bits, data }; }); }
+async function pcm(meta: NonNullable<typeof reference>, start: number, count: number) { const bytes = count * meta.channels * meta.bits / 8, b = new DataView(await meta.file.slice(meta.data + start * meta.channels * meta.bits / 8, meta.data + start * meta.channels * meta.bits / 8 + bytes).arrayBuffer()), out = new Float32Array(count); for (let i = 0; i < count; i++) { let sum = 0; for (let c = 0; c < meta.channels; c++) { const o = (i * meta.channels + c) * meta.bits / 8; sum += meta.bits === 16 ? b.getInt16(o, true) / 32768 : meta.bits === 24 ? ((b.getUint8(o) | b.getUint8(o + 1) << 8 | b.getInt8(o + 2) << 16) / 8388608) : b.getInt32(o, true) / 2147483648; } out[i] = sum / meta.channels; } return out; }
+function clean(x: Float32Array) { const out = new Float32Array(x.length); let prev = 0, hp = 0; for (let i = 0; i < x.length; i++) { hp = .995 * (hp + x[i] - prev); prev = x[i]; out[i] = Math.tanh(hp * 1.15); } return out; }
+async function opfsFile(name: string) { const root = await navigator.storage.getDirectory(); const dir = await root.getDirectoryHandle("podalign", { create: true }); return dir.getFileHandle(name, { create: true }); }
+self.onmessage = async (event: MessageEvent<Job>) => { if (event.data.type === "cancel") { cancelled = true; return; } const { role, file } = event.data; try {
+  if (role === "reference" || role === "bgm" || role === "jingle") { const meta = await header(file); if (role === "reference") reference = meta; if (role === "bgm") bgm = meta; if (role === "jingle") jingle = meta; progress(`${role}: WAVヘッダーのみ読み込み`); post({ type: "ack" }); return; }
+  if (!reference) throw new Error("リファレンスが未準備です");
+  const meta = await header(file), chunk = 30 * meta.sr, refFrames = Math.floor((reference.file.size - reference.data) / (reference.channels * reference.bits / 8)), frames = Math.min(refFrames, Math.floor((file.size - meta.data) / (meta.channels * meta.bits / 8)));
+  progress(`${role}: window単位でoffset/drift推定`); const refProbe = await pcm(reference, 0, Math.min(reference.sr * 60, refFrames)); const inProbe = await pcm(meta, 0, Math.min(meta.sr * 60, frames)); let best = 0, score = -Infinity; for (let lag = -reference.sr * 2; lag <= reference.sr * 2; lag += 240) { let s = 0; for (let i = reference.sr; i < refProbe.length - reference.sr; i += 240) { const j = i + lag; if (j >= 0 && j < inProbe.length) s += Math.abs(refProbe[i]) * Math.abs(inProbe[j]); } if (s > score) { score = s; best = lag; } }
+  const handle = await opfsFile(`${role}.f32`), w = await handle.createWritable(); try { for (let start = 0; start < frames; start += chunk) { if (cancelled) throw new Error("キャンセルされました"); const x = clean(await pcm(meta, Math.max(0, start + best), Math.min(chunk, frames - start))); await w.write(x.buffer as ArrayBuffer); progress(`${role}: ${Math.floor(start / frames * 100)}%`); } } finally { await w.close(); } outputs[role] = handle; post({ type: "ack" });
+  if (!outputs.speaker_a || !outputs.speaker_b || role !== "speaker_c") return;
+  progress("mix / master: chunk単位で処理中"); const a = await (await outputs.speaker_a.getFile()).arrayBuffer(), b = await (await outputs.speaker_b.getFile()).arrayBuffer(), c = await (await outputs.speaker_c.getFile()).arrayBuffer(); const aa = new Float32Array(a), bb = new Float32Array(b), cc = new Float32Array(c), n = Math.min(aa.length, bb.length, cc.length), left = new Float32Array(n), right = new Float32Array(n); for (let i = 0; i < n; i++) { const voice = (aa[i] + bb[i] + cc[i]) / 3, music = bgm ? (await pcm(bgm, i % Math.floor((bgm.file.size - bgm.data) / (bgm.channels * bgm.bits / 8)), 1))[0] * Math.max(.15, 1 - Math.abs(voice) * 2) * .12 : 0; const v = (voice + music + (jingle && i < jingle.sr * 3 ? (await pcm(jingle, i, 1))[0] * .2 : 0)) * 1.2; left[i] = v * .9; right[i] = v * 1.1; }
+  const raw = new ArrayBuffer(44 + n * 4), out = new DataView(raw), put = (o: number, s: string) => [...s].forEach((ch, i) => out.setUint8(o + i, ch.charCodeAt(0))); put(0, "RIFF"); out.setUint32(4, 36 + n * 4, true); put(8, "WAVE"); put(12, "fmt "); out.setUint32(16, 16, true); out.setUint16(20, 3, true); out.setUint16(22, 2, true); out.setUint32(24, 48000, true); out.setUint32(28, 48000 * 8, true); out.setUint16(32, 8, true); out.setUint16(34, 32, true); put(36, "data"); out.setUint32(40, n * 4, true); for (let i = 0; i < n; i++) out.setFloat32(44 + i * 4, Math.max(-1, Math.min(1, (left[i] + right[i]) / 2)), true); post({ type: "result", wav: raw }, [raw]);
+ } catch (e) { post({ type: "error", message: e instanceof Error ? e.message : String(e) }); } };
