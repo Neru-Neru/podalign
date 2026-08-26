@@ -42,6 +42,6 @@ export default function App() {
     <section className="card"><h2>進捗</h2><progress max={100} value={progress.match(/(\\d+)%/)?.[1] ? Number(progress.match(/(\\d+)%/)![1]) : undefined}/><p>{progress}</p>{error && <p className="log">{error}</p>}
       {download && <a className="download" download="podalign-browser.wav" href={download}>完成した WAV を保存</a>}
     </section>
-    <section className="card note"><h2>処理内容</h2><p>同期（offset / drift 推定）、ドリフト補正、ノイズ低減、ダイナミクス、BGM ducking、-16 LUFS 相当の正規化、WAV export、QC を Worker 内で順番に実行します。</p><p>メモリを抑えるため、話者トラックは1本ずつ処理して参照トラックを保持します。ブラウザの音声デコーダー仕様上、非圧縮 PCM の長時間素材ではメモリ使用量が増える場合があります。</p></section>
+    <section className="card note"><h2>処理内容</h2><p>同期（offset / drift 推定）、ドリフト補正、ノイズ低減、ダイナミクス、BGM ducking、-16 LUFS 相当の正規化、WAV export、QC を Worker 内で順番に実行します。</p><p>メモリを抑えるため、WorkerがPCM WAVをFile.slice()で30秒windowずつ読み、話者ごとの中間結果と最終mixをOPFSへ逐次書き出します。現在はブラウザ標準APIだけでbounded decodeを実現するため、入力はPCM WAV（16/24/32bit）に限定しています。</p></section>
   </main>;
 }
