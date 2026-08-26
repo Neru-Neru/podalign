@@ -23,7 +23,7 @@ npm run build
 npm run preview
 ```
 
-Open the printed URL, select the six audio files, and click **ブラウザで処理**. Audio stays in the browser. Decode and processing run in a module Web Worker; the final WAV is returned as a downloadable Blob. GitHub Pages deployment is defined in `.github/workflows/pages.yml` and uses Vite's repository base path.
+Open the printed URL, select the six audio files, and click **ブラウザで処理**. Audio stays in the browser. Decode and processing run in a module Web Worker; the final WAV is returned as a downloadable Blob. Set GitHub Pages to deploy the `web/dist` artifact from Actions (the build accepts `VITE_BASE_PATH=/<repo-name>/`).
 
 ### Architecture migration
 
