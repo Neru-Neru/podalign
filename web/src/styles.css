@@ -77,3 +77,12 @@ a { color: var(--accent); }
 .proj-item { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid #2c313a; }
 .proj-item .name { flex: 1; cursor: pointer; font-size: 15px; }
 .svg-chart { background: var(--panel2); border-radius: 6px; }
+.browser-app { margin: 0 auto; }
+.browser-app header { margin-bottom: 24px; }
+.browser-app h1 small { font-size: 0.45em; color: var(--dim); font-weight: normal; }
+.file-row { display: grid; grid-template-columns: 170px 1fr 180px; gap: 10px; align-items: center; margin: 10px 0; }
+.file-row input { width: auto; }
+.browser-app progress { width: 100%; height: 16px; }
+.download { display: inline-block; margin-top: 12px; padding: 10px 14px; background: #2d8a5a; color: white; border-radius: 4px; }
+.note { line-height: 1.65; }
+@media (max-width: 700px) { .file-row { grid-template-columns: 1fr; gap: 4px; } .main { padding: 16px; } }

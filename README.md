@@ -12,6 +12,30 @@ Runs on your own computer (or home server); you operate it from your browser.
 > validation on real-world recordings is in progress. Expect rough edges and
 > please report what breaks.
 
+## Browser-only static app
+
+The repository now includes a backend-free browser build. It is served from `web/dist` and can run on GitHub Pages without FastAPI, ffmpeg, an API, or an upload server.
+
+```bash
+cd web
+npm ci
+npm run build
+npm run preview
+```
+
+Open the printed URL, select the six audio files, and click **ブラウザで処理**. Audio stays in the browser. Decode and processing run in a module Web Worker; the final WAV is returned as a downloadable Blob. GitHub Pages deployment is defined in `.github/workflows/pages.yml` and uses Vite's repository base path.
+
+### Architecture migration
+
+| Current server edition | Browser edition |
+|---|---|
+| React → FastAPI JSON/chunk upload | React → Web Audio `File` decode |
+| Python/NumPy GCC-PHAT + ffmpeg stages | Worker-side offset search, drift estimate, cleanup, mix, ducking, master and QC |
+| FLAC and preview artifacts on server disk | Transferable `Float32Array` buffers and one final WAV Blob |
+| ffmpeg/librubberband, Python, Docker | Static HTML/JS/CSS; no runtime server |
+
+The Worker processes speaker tracks sequentially and transfers channel buffers rather than cloning them. It reports progress, supports cancellation, and does not retain intermediate stage files. This is intentionally a maintainable browser-native baseline: exact parity with the server's GCC-PHAT/rubberband and true streaming decode require WebCodecs/ffmpeg.wasm and are listed as remaining limitations in the UI and PR.
+
 ## What it does
 
 When you record remotely (talking over a video call while everyone records
