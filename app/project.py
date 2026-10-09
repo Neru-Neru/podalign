@@ -51,7 +51,11 @@ _BUILTIN_PARAMS: dict[str, dict] = {
         "bgm_bed_db": -24.0,
         "duck_threshold_db": -30.0,
         "duck_ratio": 8.0,
-        "jingle_crossfade_s": 1.0,
+        # None は他の系統に追従する自動開始。数値は番組先頭からの絶対時刻。
+        "jingle_start_s": 0.0,
+        "voice_start_s": None,
+        "bgm_start_s": None,
+        "bgm_fade_in_s": 2.0,
         "bgm_loop_crossfade_s": 2.0,
     },
     "master": {"target_i": -16.0, "target_tp": -1.5, "target_lra": 11.0},

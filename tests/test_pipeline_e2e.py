@@ -139,7 +139,15 @@ def test_full_pipeline(project):
 
     _run_and_approve(pid, "cleanup")
     _run_and_approve(pid, "dynamics")
-    _run_and_approve(pid, "mix")
+    mix_report = _run_and_approve(pid, "mix")
+    # 既定の絶対タイムライン: ジングルのみ → 話者 → 10秒後にBGM(2秒フェード)。
+    assert mix_report["jingle_start_s"] == 0.0
+    assert mix_report["voice_start_s"] == pytest.approx(5.0, abs=1 / SR)
+    assert mix_report["bgm_start_s"] == pytest.approx(15.0, abs=1 / SR)
+    assert mix_report["bgm_fade_in_s"] == 2.0
+    mix_info = ff.probe(storage.stage_dir(pid, "mix") / "mix.flac")
+    # レポートの秒数は小数3桁へ丸めている。
+    assert mix_info["duration"] == pytest.approx(mix_report["program_length_s"], abs=0.0005 + 2 / SR)
 
     master_report = _run_and_approve(pid, "master")
     final = master_report["final"]

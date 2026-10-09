@@ -22,7 +22,10 @@
     "bgm_bed_db": -24.0,
     "duck_threshold_db": -30.0,
     "duck_ratio": 8.0,
-    "jingle_crossfade_s": 1.0,
+    "jingle_start_s": 0.0,
+    "voice_start_s": null,
+    "bgm_start_s": null,
+    "bgm_fade_in_s": 2.0,
     "bgm_loop_crossfade_s": 2.0
   },
   "master": { "target_i": -16.0, "target_tp": -1.5, "target_lra": 11.0 },

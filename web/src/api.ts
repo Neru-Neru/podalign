@@ -22,6 +22,7 @@ export interface AssetState {
   received: number;
   status: "uploading" | "processing" | "ready" | "failed";
   error?: string;
+  probe?: { duration?: number };
 }
 
 export interface Project {

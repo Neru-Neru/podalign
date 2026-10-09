@@ -80,6 +80,14 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
                     except ValueError as exc:
                         raise NotRunnable(str(exc)) from exc
                     st["params"] = candidate
+                elif stage == "mix":
+                    # 素材長が必要な自動時刻の最終解決はワーカーで行うが、入力値の
+                    # 型・有限性・非負性は status を running にする前に拒否する。
+                    try:
+                        s4_mix.resolve_timing(params, 0.0, 0.0)
+                    except ValueError as exc:
+                        raise NotRunnable(str(exc)) from exc
+                    st["params"] = params
                 else:
                     st["params"] = params
             elif stage == "trim":
@@ -88,6 +96,11 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
                         st["params"],
                         doc["stages"]["sync"]["report"].get("program_length_samples", 0),
                     )
+                except ValueError as exc:
+                    raise NotRunnable(str(exc)) from exc
+            elif stage == "mix":
+                try:
+                    s4_mix.resolve_timing(st["params"], 0.0, 0.0)
                 except ValueError as exc:
                     raise NotRunnable(str(exc)) from exc
             st["status"] = "running"

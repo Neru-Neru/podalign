@@ -92,6 +92,67 @@ function ParamFields({
   );
 }
 
+function seconds(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${value} 秒` : "-";
+}
+
+/** Mix の開始位置は null を自動追従として扱うため、汎用入力とは分けて表示する。 */
+function MixFields({
+  params, jingleDuration, onChange,
+}: {
+  params: Record<string, any>;
+  jingleDuration: number;
+  onChange: (path: string[], v: unknown) => void;
+}) {
+  const jingleStart = Number(params.jingle_start_s ?? 0);
+  const resolvedVoice = params.voice_start_s == null ? jingleStart + jingleDuration : Number(params.voice_start_s);
+  const resolvedBgm = params.bgm_start_s == null ? resolvedVoice + 10 : Number(params.bgm_start_s);
+  const startField = (key: string, title: string, automatic: string, resolved: number) => {
+    const manual = params[key] != null;
+    return (
+      <div className="mix-timing-row" key={key}>
+        <label>{title}
+          <input type="number" min="0" step="0.1" disabled={!manual}
+            value={manual ? params[key] : ""}
+            placeholder={automatic}
+            onChange={e => onChange([key], Number(e.target.value))} />
+        </label>
+        <button type="button" className="small" onClick={() => onChange([key], manual ? null : resolved)}>
+          {manual ? "自動に戻す" : "手動指定"}
+        </button>
+        <span className="muted">{manual ? `指定: ${seconds(resolved)}` : automatic}</span>
+      </div>
+    );
+  };
+  return (
+    <div className="mix-fields">
+      <h4>開始タイミング</h4>
+      <div className="mix-timing-row">
+        <label>ジングル開始 (秒)
+          <input type="number" min="0" step="0.1" value={jingleStart}
+            onChange={e => onChange(["jingle_start_s"], Number(e.target.value))} />
+        </label>
+        <span className="muted">番組先頭から {seconds(jingleStart)}</span>
+      </div>
+      {startField("voice_start_s", "話者開始 (秒)", "自動: ジングル終了時", resolvedVoice)}
+      {startField("bgm_start_s", "BGM開始 (秒)", "自動: 話者開始から10秒後", resolvedBgm)}
+      <div className="mix-timing-row">
+        <label>BGM フェードイン (秒)
+          <input type="number" min="0" step="0.1" value={params.bgm_fade_in_s ?? 2}
+            onChange={e => onChange(["bgm_fade_in_s"], Number(e.target.value))} />
+        </label>
+        <span className="muted">開始時に {seconds(params.bgm_fade_in_s ?? 2)} でフェードイン</span>
+      </div>
+      <h4>ミックス設定</h4>
+      <ParamFields value={{
+        pan_width: params.pan_width, premix_gain_db: params.premix_gain_db,
+        bgm_bed_db: params.bgm_bed_db, duck_threshold_db: params.duck_threshold_db,
+        duck_ratio: params.duck_ratio, bgm_loop_crossfade_s: params.bgm_loop_crossfade_s,
+      }} path={[]} onChange={onChange} />
+    </div>
+  );
+}
+
 function ReportTable({ rows }: { rows: [string, unknown][] }) {
   return (
     <div className="report">
@@ -165,6 +226,9 @@ function StageReport({ stage, state }: { stage: string; state: StageState }) {
   }
   if (stage === "mix") {
     return <ReportTable rows={[
+      ["ジングル開始", `${r.jingle_start_s} 秒 (終了 ${r.jingle_end_s} 秒)`],
+      ["話者開始", `${r.voice_start_s} 秒 (終了 ${r.voice_end_s} 秒)`],
+      ["BGM開始", `${r.bgm_start_s} 秒 (${r.bgm_fade_in_s} 秒フェードイン、終了 ${r.bgm_end_s} 秒)`],
       ["話者バス", `${r.bus_lufs} LUFS`],
       ["BGM ゲイン", `${r.bgm_gain_db} dB (${r.bgm_looped ? "ループ" : "1回"})`],
       ["ジングルゲイン", `${r.jingle_gain_db} dB`],
@@ -250,6 +314,12 @@ export default function StagePanel({
                 setParam(["end_s"], end);
               }}
             />
+          ) : stage === "mix" ? (
+            <div className="params">
+              <MixFields params={params}
+                jingleDuration={Number(project.assets.jingle?.probe?.duration ?? 0)}
+                onChange={setParam} />
+            </div>
           ) : Object.keys(params).length > 0 && (
             <div className="params">
               <ParamFields value={params} path={[]} onChange={setParam} />

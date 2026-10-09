@@ -146,7 +146,7 @@ its upstream artifacts + parameters.
 | 2 Trim | manually select one shared range from four waveforms and trim at 48 kHz sample boundaries |
 | 3 Cleanup | high-pass 80 Hz → auto hum notch (50/60 Hz detection) → declick/declip → `afftdn` NR (≤12 dB) → de-esser → gentle gate → linear gain to -20 LUFS |
 | 4 Dynamics | two-stage compression (glue 2.5:1 → peak 6:1) + subtle EQ |
-| 5 Mix | L/C/R micro-panning → `amix` → seamlessly looped BGM with sidechain ducking → jingle crossfade |
+| 5 Mix | place the jingle, voice bus, and looped/ducked BGM on an absolute timeline → `amix` (by default: jingle at 0, voice at jingle end, BGM 10 seconds later with a 2-second fade-in) |
 | 6 Master | two-pass linear `loudnorm` to -16 LUFS / -1.5 dBTP → safety limiter -1.0 dB |
 | 7 Export | WAV 24-bit / MP3 192k CBR / AAC 128k + QC report |
 
