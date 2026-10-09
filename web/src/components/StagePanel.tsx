@@ -260,10 +260,12 @@ export default function StagePanel({
   const [open, setOpen] = useState(status !== "approved");
   const [params, setParams] = useState<Record<string, any>>(state.params);
   const [error, setError] = useState("");
+  const savedParams = JSON.stringify(state.params);
 
   // 承認されたら自動で折りたたむ(手動トグルは維持)
   useEffect(() => { setOpen(status !== "approved"); }, [status]);
-  useEffect(() => { setParams(state.params); }, [state.params]);
+  // 同じ設定を返す定期取得では、未実行の編集値を上書きしない。
+  useEffect(() => { setParams(JSON.parse(savedParams)); }, [savedParams]);
 
   const upstreamApproved = project.stage_order
     .slice(0, project.stage_order.indexOf(stage))
