@@ -15,7 +15,8 @@ LABEL org.opencontainers.image.title="podalign" \
 # Debian の ffmpeg は librubberband 有効ビルド(ドリフト補正に必須)。
 # 開発環境は 4.4.2 で検証済み。メジャーバージョン差異があれば §3 の方針どおり実測で確認すること
 # NOTE: librubberband 入り ffmpeg は GPL — 同梱表記とソース入手方法は NOTICE 参照
-RUN apt-get update \
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 RUN ffmpeg -filters 2>/dev/null | grep -q rubberband || \
