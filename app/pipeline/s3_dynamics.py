@@ -8,7 +8,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from . import ffmpeg
-from .base import SPEAKERS, StageContext
+from .base import StageContext
 
 
 def build_chain(params: dict) -> str:
@@ -43,5 +43,5 @@ def _process(ctx: StageContext, role: str, chain: str) -> dict:
 def run(ctx: StageContext, params: dict) -> dict:
     chain = build_chain(params)
     with ThreadPoolExecutor(max_workers=2) as pool:
-        results = dict(zip(SPEAKERS, pool.map(lambda r: _process(ctx, r, chain), SPEAKERS)))
+        results = dict(zip(ctx.speakers, pool.map(lambda r: _process(ctx, r, chain), ctx.speakers)))
     return {"tracks": results, "filter_chain": chain, "warnings": []}

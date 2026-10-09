@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import analysis, ffmpeg
-from .base import SPEAKERS, StageContext
+from .base import StageContext
 
 SR = 48000
 MAX_PLAUSIBLE_DRIFT_PPM = 150.0
@@ -110,7 +110,7 @@ def run(ctx: StageContext, params: dict) -> dict:
 
     # 推定(2並列 — N-4。numpy FFT と ffmpeg サブプロセスは GIL を外れる)
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = {r: pool.submit(_estimate, ctx, r, ref8k, params) for r in SPEAKERS}
+        futures = {r: pool.submit(_estimate, ctx, r, ref8k, params) for r in ctx.speakers}
         estimates = {r: f.result() for r, f in futures.items()}
 
     # 共通タイムライン長 L = 補正後長の最大(R-4)
@@ -120,7 +120,7 @@ def run(ctx: StageContext, params: dict) -> dict:
         src_len = ffmpeg.probe(ctx.upstream_dir("ingest") / f"{role}.flac")["duration"]
         return (src_len - est.offset_s) / (1 + s)
 
-    program_len = max(corrected_end_s(r) for r in SPEAKERS)
+    program_len = max(corrected_end_s(r) for r in ctx.speakers)
     # サンプル数を共通時間軸の唯一の正とする。秒へ丸めた値を後段で再び
     # サンプル化すると、既定の全範囲Trimでも末尾が欠けたり伸びたりする。
     program_samples = math.floor(program_len * SR)
@@ -128,9 +128,9 @@ def run(ctx: StageContext, params: dict) -> dict:
     thr = float(params["drift_threshold_ppm"])
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(
-            lambda r: _correct(ctx, r, estimates[r], program_samples, thr), SPEAKERS
+            lambda r: _correct(ctx, r, estimates[r], program_samples, thr), ctx.speakers
         ))
-        verifications = dict(zip(SPEAKERS, pool.map(lambda r: _verify(ctx, r, ref8k), SPEAKERS)))
+        verifications = dict(zip(ctx.speakers, pool.map(lambda r: _verify(ctx, r, ref8k), ctx.speakers)))
 
     # Trim の編集用にreferenceも同じ原点・同じ長さの成果物へ揃える。
     # 最終ミックスには使わないが、話者とreferenceの波形を同じ座標で比較するために必要。
@@ -143,7 +143,7 @@ def run(ctx: StageContext, params: dict) -> dict:
     ])
 
     warnings: list[str] = []
-    for role in SPEAKERS:
+    for role in ctx.speakers:
         warnings += [f"{role}: {w}" for w in estimates[role].warnings]
         resid = verifications[role]["max_segment_residual_ms"]
         if abs(resid) > 1.0:
@@ -155,25 +155,25 @@ def run(ctx: StageContext, params: dict) -> dict:
     # UI 確認用: 話者トラック重ねのチェックミックス + 各トラック preview/peaks
     check = ctx.out_dir / "_check_mix.flac"
     inputs = []
-    for r in SPEAKERS:
+    for r in ctx.speakers:
         inputs += ["-i", str(ctx.out_dir / f"{r}.flac")]
     ffmpeg.run([*inputs, "-filter_complex",
-                f"amix=inputs={len(SPEAKERS)}:normalize=0,volume=-6dB", *ffmpeg.FLAC24, str(check)])
+                f"amix=inputs={len(ctx.speakers)}:normalize=0,volume=-6dB", *ffmpeg.FLAC24, str(check)])
     ctx.make_preview(check, "mix_check")
     check.unlink()
-    for r in SPEAKERS:
+    for r in ctx.speakers:
         ctx.make_preview(ctx.out_dir / f"{r}.flac", r)
         ctx.make_peaks(ctx.out_dir / f"{r}.flac", r)
     ctx.make_preview(reference_out, "reference")
     ctx.make_peaks(reference_out, "reference")
 
     return {
-        "offsets_ms": {r: round(estimates[r].offset_s * 1e3, 3) for r in SPEAKERS},
-        "drift_ppm": {r: round(estimates[r].drift_ppm, 2) for r in SPEAKERS},
-        "drift_corrected": {r: abs(estimates[r].drift_ppm) >= thr for r in SPEAKERS},
-        "residual_ms": {r: verifications[r]["max_segment_residual_ms"] for r in SPEAKERS},
+        "offsets_ms": {r: round(estimates[r].offset_s * 1e3, 3) for r in ctx.speakers},
+        "drift_ppm": {r: round(estimates[r].drift_ppm, 2) for r in ctx.speakers},
+        "drift_corrected": {r: abs(estimates[r].drift_ppm) >= thr for r in ctx.speakers},
+        "residual_ms": {r: verifications[r]["max_segment_residual_ms"] for r in ctx.speakers},
         "verification": verifications,
-        "segments": {r: estimates[r].segments for r in SPEAKERS},
+        "segments": {r: estimates[r].segments for r in ctx.speakers},
         "program_length_samples": program_samples,
         "program_length_s": program_samples / SR,
         "warnings": warnings,

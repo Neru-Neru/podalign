@@ -1,6 +1,6 @@
 """パイプライン一気通貫テスト(設計 §12.2 / §12.3 / §12.5 の縮約版)。
 
-60秒の合成素材6本を全ステージに通し、
+60秒の合成素材5〜6本を全ステージに通し、
 - Sync: 既知オフセットの復元と残差 ±1ms
 - Master: Integrated -16 ±0.5 LUFS / True Peak ≤ -1.0 dBTP(ebur128 実測)
 - Export: 3フォーマット生成
@@ -35,16 +35,16 @@ def _write_wav(path: Path, x: np.ndarray, sr: int = SR) -> None:
     )
 
 
-@pytest.fixture
-def project(data_dir) -> dict:
+@pytest.fixture(params=[2, 3], ids=["two-speakers", "three-speakers"])
+def project(data_dir, request) -> dict:
     doc = prj.create_project("e2e")
     pid = doc["id"]
     assets = prj.project_dir(pid) / "assets"
 
-    # 3話者: 帯域の違う発話様バースト。reference = 各話者を「話者が先行」する形で合成
+    # 2〜3話者: 帯域の違う発話様バースト。reference = 各話者を「話者が先行」する形で合成
     # (off = 話者時刻 − ref 時刻 > 0 → ref 側では話者素材の off 秒目から始まる)
     rng = np.random.default_rng(7)
-    roles = list(OFFSETS)
+    roles = prj.SPEAKERS[:request.param]
     voices = {}
     for i, role in enumerate(roles):
         v = speechlike(seed=10 + i, dur=DUR, sr=SR) * 0.5
@@ -115,8 +115,8 @@ def test_full_pipeline(project):
     )
     assert (sync_dir / "preview_reference.opus").exists()
     assert (sync_dir / "peaks_reference.json").exists()
-    assert set(sync_report["offsets_ms"]) == set(list(OFFSETS))
-    for role in list(OFFSETS):
+    assert set(sync_report["offsets_ms"]) == set(prj.speaker_roles(project))
+    for role in prj.speaker_roles(project):
         expected = OFFSETS[role]
         got = sync_report["offsets_ms"][role] / 1e3
         assert abs(got - expected) < 1.5e-3, f"{role}: {got} vs {expected}"
@@ -130,7 +130,7 @@ def test_full_pipeline(project):
     assert trim_report["output_length_s"] == pytest.approx(trim_report["program_length_s"], abs=1 / SR)
     trim_dir = storage.stage_dir(pid, "trim")
     trim_lengths = []
-    for role in (*list(OFFSETS), "reference"):
+    for role in (*prj.speaker_roles(project), "reference"):
         assert (trim_dir / f"{role}.flac").exists()
         info = ff.probe(trim_dir / f"{role}.flac")
         trim_lengths.append(info["duration"])

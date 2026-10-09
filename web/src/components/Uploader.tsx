@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { AssetState, Project, ROLES, ROLE_LABELS, fmtBytes, uploadAsset } from "../api";
 
-/** 6ファイルのロール割り当てアップロード。チャンク進捗 + レジューム表示(§9 画面1)。 */
+/** 素材のロール割り当てアップロード。チャンク進捗 + レジューム表示(§9 画面1)。 */
 export default function Uploader({ project }: { project: Project }) {
   const [local, setLocal] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -38,6 +38,7 @@ export default function Uploader({ project }: { project: Project }) {
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>素材アップロード</h3>
+      <p className="muted">話者A/B/Cのうち最低2人の録音と、リファレンス・ジングル・BGMを選択してください。3人目の録音は省略できます。</p>
       {ROLES.map(role => {
         const a = project.assets[role];
         const frac = a

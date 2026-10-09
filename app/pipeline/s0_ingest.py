@@ -9,18 +9,18 @@ from __future__ import annotations
 import numpy as np
 
 from . import analysis, ffmpeg
-from .base import SPEAKERS, StageContext
+from .base import StageContext
 
 
 def run(ctx: StageContext, params: dict) -> dict:
     report: dict = {"tracks": {}, "warnings": []}
     durations: dict[str, float] = {}
 
-    for role in [*SPEAKERS, "reference", "jingle", "bgm"]:
+    for role in [*ctx.speakers, "reference", "jingle", "bgm"]:
         src = ctx.asset(role)
         ctx.progress(f"ingest: {role}")
         info = ffmpeg.probe(src)
-        mono = role in (*SPEAKERS, "reference")
+        mono = role in (*ctx.speakers, "reference")
         out = ctx.out_dir / f"{role}.flac"
         args = ["-i", str(src), "-ar", "48000"]
         # 話者/reference はモノ、jingle/bgm は 2ch に固定
@@ -49,14 +49,14 @@ def run(ctx: StageContext, params: dict) -> dict:
             report["warnings"].append(f"{role}: クリッピング検出 ({clip_ratio:.4%})")
         if abs(track["dc_offset"] or 0) > 0.01:
             report["warnings"].append(f"{role}: DC オフセット {track['dc_offset']:.4f}")
-        if role in SPEAKERS and silence > 0.9:
+        if role in ctx.speakers and silence > 0.9:
             report["warnings"].append(f"{role}: 無音率 {silence:.0%} — 素材の取り違え?")
 
         ctx.make_preview(out, role)
         ctx.make_peaks(out, role)
 
     # 長さの不一致チェック(話者と reference は同じ収録なので大差は異常)
-    long_tracks = {r: durations[r] for r in (*SPEAKERS, "reference")}
+    long_tracks = {r: durations[r] for r in (*ctx.speakers, "reference")}
     spread = max(long_tracks.values()) - min(long_tracks.values())
     if spread > 120:
         report["warnings"].append(

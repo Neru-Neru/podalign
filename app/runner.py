@@ -14,7 +14,7 @@ from pathlib import Path
 from . import project as prj
 from . import storage
 from .pipeline import ffmpeg
-from .pipeline.base import SPEAKERS, StageContext
+from .pipeline.base import StageContext
 from .pipeline import (
     s0_ingest, s1_sync, s2_trim, s2_cleanup, s3_dynamics, s4_mix, s5_master, s6_export,
 )
@@ -28,10 +28,10 @@ STAGE_MODULES = {
 # 各ステージが読む上流と、再生成判定に使う必須成果物
 REQUIRED_ARTIFACTS = {
     "ingest": [f"{r}.flac" for r in prj.ROLES],
-    "sync": [f"{r}.flac" for r in (*SPEAKERS, "reference")],
-    "trim": [f"{r}.flac" for r in (*SPEAKERS, "reference")],
-    "cleanup": [f"{r}.flac" for r in SPEAKERS],
-    "dynamics": [f"{r}.flac" for r in SPEAKERS],
+    "sync": [f"{r}.flac" for r in (*prj.SPEAKERS, "reference")],
+    "trim": [f"{r}.flac" for r in (*prj.SPEAKERS, "reference")],
+    "cleanup": [f"{r}.flac" for r in prj.SPEAKERS],
+    "dynamics": [f"{r}.flac" for r in prj.SPEAKERS],
     "mix": ["mix.flac"],
     "master": ["master.flac"],
     "export": ["episode.wav", "episode.mp3", "episode.m4a"],
@@ -55,7 +55,7 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
     try:
         with prj.update(project_id) as doc:
             if not prj.assets_ready(doc):
-                raise NotRunnable("素材6本のアップロードが完了していません")
+                raise NotRunnable("話者2人以上とリファレンス・ジングル・BGMのアップロードを完了してください")
             statuses = prj.effective_status(doc)
             order = doc["stage_order"]
             if stage not in order:
@@ -135,7 +135,12 @@ def _set_progress(project_id: str, stage: str, msg: str) -> None:
 
 def _artifacts_missing(project_id: str, stage: str) -> bool:
     sdir = storage.stage_dir(project_id, stage)
-    return any(not (sdir / f).exists() for f in REQUIRED_ARTIFACTS[stage])
+    speakers = prj.speaker_roles(prj.load(project_id))
+    required = [
+        name for name in REQUIRED_ARTIFACTS[stage]
+        if Path(name).stem not in prj.SPEAKERS or Path(name).stem in speakers
+    ]
+    return any(not (sdir / name).exists() for name in required)
 
 
 def _worker(project_id: str, stage: str) -> None:

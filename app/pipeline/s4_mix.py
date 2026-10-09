@@ -1,6 +1,6 @@
 """Stage 5 — Mix。
 
-1. 3話者を L/C/R に薄くパン(定パワー則)→ amix normalize=0 で話者バス
+1. 2話者を L/R、3話者を L/C/R に薄くパン(定パワー則)→ amix normalize=0 で話者バス
    (合算ピーク +9.5dB に備え premix_gain_db を先に引く — §6.1)
 2. BGM: 単体でシームレスなループ単位を作り -stream_loop -1 で必要長へ
    (aloop は 1.3GB RAM を食うため使わない — §7)
@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 
 from . import ffmpeg
-from .base import SPEAKERS, StageContext
+from .base import StageContext
 
 PAN_POSITIONS = {"speaker_a": -1.0, "speaker_b": 0.0, "speaker_c": 1.0}
 
@@ -94,17 +94,18 @@ def run(ctx: StageContext, params: dict) -> dict:
     # --- 1. 話者バス(+ ebur128 同時測定) ---
     ctx.progress("mix: 話者バス合成")
     inputs, chains = [], []
-    for i, role in enumerate(SPEAKERS):
+    for i, role in enumerate(ctx.speakers):
         inputs += ["-i", str(dyn / f"{role}.flac")]
-        gl, gr = pan_gains(PAN_POSITIONS[role], width)
+        position = (-1.0 if i == 0 else 1.0) if len(ctx.speakers) == 2 else PAN_POSITIONS[role]
+        gl, gr = pan_gains(position, width)
         chains.append(
             f"[{i}:a]volume={premix}dB,pan=stereo|c0={gl:.4f}*c0|c1={gr:.4f}*c0[s{i}]"
         )
     bus = ctx.out_dir / "_bus.flac"
     graph = (
         ";".join(chains)
-        + ";" + "".join(f"[s{i}]" for i in range(len(SPEAKERS)))
-        + f"amix=inputs={len(SPEAKERS)}:normalize=0,asplit[keep][meter]"
+        + ";" + "".join(f"[s{i}]" for i in range(len(ctx.speakers)))
+        + f"amix=inputs={len(ctx.speakers)}:normalize=0,asplit[keep][meter]"
         + ";[meter]ebur128=peak=none[m]"
     )
     stderr = ffmpeg.run([

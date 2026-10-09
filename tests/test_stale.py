@@ -6,6 +6,8 @@ GC で成果物が消えていても判定できること(R-1)。
 """
 from __future__ import annotations
 
+import pytest
+
 from app import project as prj
 
 
@@ -69,3 +71,35 @@ def test_params_canonicalization(data_dir):
     p = doc["stages"]["sync"]["params"]
     doc["stages"]["sync"]["params"] = dict(reversed(list(p.items())))
     assert all(s == "approved" for s in prj.effective_status(doc).values())
+
+
+@pytest.mark.parametrize("omitted", prj.SPEAKERS)
+def test_two_speakers_ready_and_adding_third_stales_all(data_dir, omitted):
+    doc = _make_ready_project()
+    third = doc["assets"].pop(omitted)
+    assert prj.assets_ready(doc)
+    fps = prj.expected_fingerprints(doc)
+    assert all(fps.values())
+    for stage in doc["stage_order"]:
+        doc["stages"][stage]["input_fingerprint"] = fps[stage]
+    assert all(s == "approved" for s in prj.effective_status(doc).values())
+    doc["assets"][omitted] = third
+    assert all(s == "stale" for s in prj.effective_status(doc).values())
+
+
+@pytest.mark.parametrize("missing", [
+    ("speaker_b", "speaker_c"), ("reference",), ("jingle",), ("bgm",),
+])
+def test_required_assets_still_block_execution(data_dir, missing):
+    doc = _make_ready_project()
+    for role in missing:
+        del doc["assets"][role]
+    assert not prj.assets_ready(doc)
+    assert not any(prj.expected_fingerprints(doc).values())
+
+
+@pytest.mark.parametrize("status", ["uploading", "processing", "failed"])
+def test_selected_third_speaker_must_finish_upload(data_dir, status):
+    doc = _make_ready_project()
+    doc["assets"]["speaker_c"]["status"] = status
+    assert not prj.assets_ready(doc)

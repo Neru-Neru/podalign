@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import ffmpeg
-from .base import SPEAKERS, StageContext
+from .base import StageContext
 
 SR = 48000
 
@@ -67,7 +67,7 @@ def resolve_bounds(
 
 def _input_paths(ctx: StageContext) -> dict[str, Path]:
     return {
-        **{r: ctx.upstream_dir("sync") / f"{r}.flac" for r in SPEAKERS},
+        **{r: ctx.upstream_dir("sync") / f"{r}.flac" for r in ctx.speakers},
         "reference": ctx.upstream_dir("sync") / "reference.flac",
     }
 

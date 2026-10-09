@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { Project, StageState, api, STAGE_LABELS } from "../api";
+import { Project, StageState, api, STAGE_LABELS, speakerRoles } from "../api";
 import ABPlayer from "./ABPlayer";
 import SyncView from "./SyncView";
 import TrimView from "./TrimView";
 
-const SPEAKERS = ["speaker_a", "speaker_b", "speaker_c"];
 const LEGACY_STAGE_LABELS: Record<string, string> = {
   cleanup: "2. Cleanup(整音)", dynamics: "3. Dynamics(コンプ・EQ)",
   mix: "4. Mix", master: "5. Master", export: "6. Export",
@@ -18,7 +17,7 @@ function stageLabel(stage: string, project: Project): string {
 
 /** ステージごとの試聴トラックと A/B 比較先(処理前 = 上流ステージの同トラック) */
 function tracksFor(stage: string, project: Project): { name: string; ab?: { stage: string; name: string }; peaks?: boolean }[] {
-  const speakers = SPEAKERS;
+  const speakers = speakerRoles(project);
   switch (stage) {
     case "ingest":
       return [...speakers, "reference", "jingle", "bgm"]
@@ -269,8 +268,7 @@ export default function StagePanel({
   const upstreamApproved = project.stage_order
     .slice(0, project.stage_order.indexOf(stage))
     .every(s => project.stages[s].effective_status === "approved");
-  const assetsReady = Object.keys(project.assets).length >= 6 &&
-    Object.values(project.assets).every(a => a.status === "ready");
+  const assetsReady = project.assets_ready;
   const canRun = assetsReady && upstreamApproved && !anyRunning && status !== "running";
 
   const setParam = (path: string[], v: unknown) => {
@@ -307,7 +305,7 @@ export default function StagePanel({
         <div onClick={e => e.stopPropagation()}>
           {stage === "trim" ? (
             <TrimView
-              projectId={project.id} speakers={SPEAKERS} params={params}
+              projectId={project.id} speakers={speakerRoles(project)} params={params}
               programLengthSamples={Number(project.stages.sync?.report?.program_length_samples ?? 0)}
               onChange={(start, end) => {
                 setParam(["start_s"], start);

@@ -23,7 +23,17 @@ DATA_DIR = Path(os.environ.get("PODCAST_DATA_DIR", "data"))
 
 STAGE_ORDER = ["ingest", "sync", "trim", "cleanup", "dynamics", "mix", "master", "export"]
 STAGE_DIRS = {name: f"{i:02d}_{name}" for i, name in enumerate(STAGE_ORDER)}
-ROLES = ["speaker_a", "speaker_b", "speaker_c", "reference", "jingle", "bgm"]
+SPEAKERS = ["speaker_a", "speaker_b", "speaker_c"]
+ROLES = [*SPEAKERS, "reference", "jingle", "bgm"]
+
+
+def speaker_roles(doc: dict) -> list[str]:
+    return [role for role in SPEAKERS if role in doc["assets"]]
+
+
+def asset_roles(doc: dict) -> list[str]:
+    return [*speaker_roles(doc), "reference", "jingle", "bgm"]
+
 
 _BUILTIN_PARAMS: dict[str, dict] = {
     "ingest": {},
@@ -194,7 +204,7 @@ def expected_fingerprints(doc: dict) -> dict[str, str | None]:
     if not assets_ready(doc):
         return {s: None for s in doc["stage_order"]}
     seed = canonical_json(
-        {role: doc["assets"][role]["sha256"] for role in ROLES}
+        {role: doc["assets"][role]["sha256"] for role in asset_roles(doc)}
     )
     prev: str | None = None
     for stage in doc["stage_order"]:
@@ -206,8 +216,8 @@ def expected_fingerprints(doc: dict) -> dict[str, str | None]:
 
 
 def assets_ready(doc: dict) -> bool:
-    return all(
-        doc["assets"].get(r, {}).get("status") == "ready" for r in ROLES
+    return len(speaker_roles(doc)) >= 2 and all(
+        doc["assets"].get(r, {}).get("status") == "ready" for r in asset_roles(doc)
     )
 
 
@@ -230,6 +240,7 @@ def effective_status(doc: dict) -> dict[str, str]:
 def serialize(doc: dict) -> dict:
     """GET /api/projects/{id} 用: stale 注釈と期待指紋を付けてそのまま返す。"""
     doc = json.loads(json.dumps(doc))  # deep copy
+    doc["assets_ready"] = assets_ready(doc)
     statuses = effective_status(doc)
     for stage, status in statuses.items():
         doc["stages"][stage]["effective_status"] = status

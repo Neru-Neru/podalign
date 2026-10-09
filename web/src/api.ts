@@ -30,6 +30,7 @@ export interface Project {
   name: string;
   created_at: string;
   assets: Record<string, AssetState>;
+  assets_ready: boolean;
   stage_order: string[];
   stages: Record<string, StageState>;
 }
@@ -44,6 +45,10 @@ export interface ProjectSummary {
 export const ROLES = [
   "speaker_a", "speaker_b", "speaker_c", "reference", "jingle", "bgm",
 ] as const;
+
+export function speakerRoles(project: Project): string[] {
+  return ROLES.filter(role => role.startsWith("speaker_") && role in project.assets);
+}
 
 export const ROLE_LABELS: Record<string, string> = {
   speaker_a: "話者A", speaker_b: "話者B", speaker_c: "話者C",

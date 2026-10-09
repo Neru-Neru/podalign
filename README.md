@@ -30,7 +30,7 @@ thousandth of a second — warning you on screen if it isn't.
 
 After Sync, a manual Trim stage shows speaker A/B/C and the reference track
 on one shared timeline. Drag the selection or its left/right handles to cut
-the same range from all four tracks. Automatic silence detection and gap
+the same range from all three or four tracks. Automatic silence detection and gap
 shortening are intentionally not part of this stage.
 
 After that, it handles the standard podcast finishing steps for you:
@@ -46,11 +46,11 @@ your back. At the end you export finished WAV / MP3 / AAC files.
 
 ## What you need
 
-Six audio files:
+Five or six audio files:
 
 | File | Description |
 |---|---|
-| 3 speaker recordings | Each host's local recording (currently fixed at 3 hosts) |
+| 2–3 speaker recordings | Each host's local recording (minimum 2, maximum 3 hosts) |
 | 1 call recording | The Zoom/call-side recording. **Used only to measure the drift — it never ends up in the final mix** |
 | 1 jingle | A short sound for your opening, etc. |
 | 1 music track | Background music that will be looped |
@@ -111,7 +111,7 @@ Yes. When you change a setting, only the steps affected by it are redone;
 everything else stays as-is.
 
 **Q. Does it work for 2-host or 4-host shows?**
-Currently only the 3-host layout is supported.
+Two- and three-host episodes are supported. Upload at least two of speaker A/B/C; the third recording can be omitted. Four or more hosts are not supported.
 
 ## For the curious: how it works
 
@@ -143,7 +143,7 @@ its upstream artifacts + parameters.
 |---|---|
 | 0 Ingest | ffprobe validation → unify to 48 kHz / FLAC 24-bit → clipping / DC / silence QC |
 | 1 Sync | offset + clock-drift estimation and correction |
-| 2 Trim | manually select one shared range from four waveforms and trim at 48 kHz sample boundaries |
+| 2 Trim | manually select one shared range from three or four waveforms and trim at 48 kHz sample boundaries |
 | 3 Cleanup | high-pass 80 Hz → auto hum notch (50/60 Hz detection) → declick/declip → `afftdn` NR (≤12 dB) → de-esser → gentle gate → linear gain to -20 LUFS |
 | 4 Dynamics | two-stage compression (glue 2.5:1 → peak 6:1) + subtle EQ |
 | 5 Mix | place the jingle, voice bus, and looped/ducked BGM on an absolute timeline → `amix` (by default: jingle at 0, voice at jingle end, BGM 10 seconds later with a 2-second fade-in) |

@@ -10,7 +10,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from . import analysis, ffmpeg
-from .base import SPEAKERS, PREVIEW_BITRATE_CLEANUP, StageContext
+from .base import PREVIEW_BITRATE_CLEANUP, StageContext
 
 
 def build_chain(
@@ -94,8 +94,8 @@ def _process(ctx: StageContext, role: str, params: dict) -> dict:
 def run(ctx: StageContext, params: dict) -> dict:
     with ThreadPoolExecutor(max_workers=2) as pool:   # N-4: トラック並列度 2
         results = dict(zip(
-            SPEAKERS,
-            pool.map(lambda r: _process(ctx, r, params), SPEAKERS),
+            ctx.speakers,
+            pool.map(lambda r: _process(ctx, r, params), ctx.speakers),
         ))
     warnings = []
     for role, rep in results.items():

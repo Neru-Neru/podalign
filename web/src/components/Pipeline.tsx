@@ -44,8 +44,7 @@ export default function Pipeline({
 
   const anyRunning = project.stage_order.some(
     s => project.stages[s].status === "running");
-  const assetsReady = Object.keys(project.assets).length >= 6 &&
-    Object.values(project.assets).every(a => a.status === "ready");
+  const assetsReady = project.assets_ready;
 
   return (
     <div className="layout">

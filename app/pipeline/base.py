@@ -27,6 +27,10 @@ class StageContext:
     progress: Callable[[str], None] = lambda msg: None
 
     @property
+    def speakers(self) -> list[str]:
+        return prj.speaker_roles(self.doc)
+
+    @property
     def out_dir(self) -> Path:
         d = storage.stage_dir(self.project_id, self.stage)
         d.mkdir(parents=True, exist_ok=True)
@@ -59,6 +63,3 @@ class StageContext:
         payload = {"peaks": peaks, "duration": ffmpeg.probe(src)["duration"]}
         path = self.out_dir / f"peaks_{name}.json"
         path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-SPEAKERS = ["speaker_a", "speaker_b", "speaker_c"]
