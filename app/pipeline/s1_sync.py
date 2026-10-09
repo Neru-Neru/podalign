@@ -15,6 +15,7 @@ reference(通話録音)を共通時間軸とし、各話者トラックの
 """
 from __future__ import annotations
 
+import math
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -120,7 +121,9 @@ def run(ctx: StageContext, params: dict) -> dict:
         return (src_len - est.offset_s) / (1 + s)
 
     program_len = max(corrected_end_s(r) for r in SPEAKERS)
-    program_samples = int(program_len * SR)
+    # サンプル数を共通時間軸の唯一の正とする。秒へ丸めた値を後段で再び
+    # サンプル化すると、既定の全範囲Trimでも末尾が欠けたり伸びたりする。
+    program_samples = math.floor(program_len * SR)
 
     thr = float(params["drift_threshold_ppm"])
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -128,6 +131,16 @@ def run(ctx: StageContext, params: dict) -> dict:
             lambda r: _correct(ctx, r, estimates[r], program_samples, thr), SPEAKERS
         ))
         verifications = dict(zip(SPEAKERS, pool.map(lambda r: _verify(ctx, r, ref8k), SPEAKERS)))
+
+    # Trim の編集用にreferenceも同じ原点・同じ長さの成果物へ揃える。
+    # 最終ミックスには使わないが、話者とreferenceの波形を同じ座標で比較するために必要。
+    reference_out = ctx.out_dir / "reference.flac"
+    ffmpeg.run([
+        "-i", str(ref_path), "-af",
+        f"atrim=end_sample={program_samples},apad=whole_len={program_samples},"
+        f"atrim=end_sample={program_samples},asetpts=PTS-STARTPTS",
+        *ffmpeg.FLAC24, str(reference_out),
+    ])
 
     warnings: list[str] = []
     for role in SPEAKERS:
@@ -139,18 +152,20 @@ def run(ctx: StageContext, params: dict) -> dict:
                 "reference(VoIP 録音)のジッタバッファ起因の非線形ジャンプの可能性があります"
             )
 
-    # UI 確認用: 3トラック重ねのチェックミックス + 各トラック preview/peaks
+    # UI 確認用: 話者トラック重ねのチェックミックス + 各トラック preview/peaks
     check = ctx.out_dir / "_check_mix.flac"
     inputs = []
     for r in SPEAKERS:
         inputs += ["-i", str(ctx.out_dir / f"{r}.flac")]
     ffmpeg.run([*inputs, "-filter_complex",
-                "amix=inputs=3:normalize=0,volume=-6dB", *ffmpeg.FLAC24, str(check)])
+                f"amix=inputs={len(SPEAKERS)}:normalize=0,volume=-6dB", *ffmpeg.FLAC24, str(check)])
     ctx.make_preview(check, "mix_check")
     check.unlink()
     for r in SPEAKERS:
         ctx.make_preview(ctx.out_dir / f"{r}.flac", r)
         ctx.make_peaks(ctx.out_dir / f"{r}.flac", r)
+    ctx.make_preview(reference_out, "reference")
+    ctx.make_peaks(reference_out, "reference")
 
     return {
         "offsets_ms": {r: round(estimates[r].offset_s * 1e3, 3) for r in SPEAKERS},
@@ -159,6 +174,7 @@ def run(ctx: StageContext, params: dict) -> dict:
         "residual_ms": {r: verifications[r]["max_segment_residual_ms"] for r in SPEAKERS},
         "verification": verifications,
         "segments": {r: estimates[r].segments for r in SPEAKERS},
-        "program_length_s": round(program_len, 3),
+        "program_length_samples": program_samples,
+        "program_length_s": program_samples / SR,
         "warnings": warnings,
     }

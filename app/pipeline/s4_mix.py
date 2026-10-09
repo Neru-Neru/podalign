@@ -1,4 +1,4 @@
-"""Stage 4 — Mix。
+"""Stage 5 — Mix。
 
 1. 3話者を L/C/R に薄くパン(定パワー則)→ amix normalize=0 で話者バス
    (合算ピーク +9.5dB に備え premix_gain_db を先に引く — §6.1)

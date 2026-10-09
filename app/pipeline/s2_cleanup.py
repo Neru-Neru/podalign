@@ -1,4 +1,4 @@
-"""Stage 2 — Cleanup(話者ごとの整音)。順序が音質を決める(§7)。
+"""Stage 3 — Cleanup(話者ごとの整音)。順序が音質を決める(§7)。
 
 1. ハイパス 80Hz(DC も落ちる) 2. ハム自動検出→ノッチ 3. declick/declip(QC 検出時)
 4. afftdn(ノイズフロア自動推定、削減量 12dB クランプ) 5. ディエッサー
@@ -40,7 +40,9 @@ def build_chain(
 
 
 def _process(ctx: StageContext, role: str, params: dict) -> dict:
-    src = ctx.upstream_dir("sync") / f"{role}.flac"
+    # 新規プロジェクトは Trim 後、旧 project.json は Sync 直後を読む。
+    input_stage = "trim" if "trim" in ctx.doc["stage_order"] else "sync"
+    src = ctx.upstream_dir(input_stage) / f"{role}.flac"
     out = ctx.out_dir / f"{role}.flac"
 
     ctx.progress(f"cleanup 解析: {role}")

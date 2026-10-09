@@ -1,4 +1,4 @@
-"""Stage 3 — Dynamics(コンプ・EQ)。
+"""Stage 4 — Dynamics(コンプ・EQ)。
 
 2段コンプ(グルー→ピーク)は放送・Podcast の定番手法(§7)。
 EQ は既定で控えめ(3–5kHz +2dB 明瞭度 / 200–300Hz -2dB こもり除去)。

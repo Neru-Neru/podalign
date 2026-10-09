@@ -14,6 +14,16 @@ PERSISTENT_SUFFIXES = {".opus", ".json"}
 
 
 def stage_dir(project_id: str, stage: str) -> Path:
+    # 新規プロジェクトは trim を含む順序、旧 project.json は旧順序のまま。
+    # グローバルな STAGE_DIRS だけで解決すると旧 cleanup 以降の成果物を
+    # 02_cleanup から 03_cleanup に移してしまうため、保存済み順序を優先する。
+    try:
+        doc = prj.load(project_id)
+        order = doc.get("stage_order", prj.STAGE_ORDER)
+        if stage in order:
+            return prj.project_dir(project_id) / "stages" / f"{order.index(stage):02d}_{stage}"
+    except FileNotFoundError:
+        pass
     return prj.project_dir(project_id) / "stages" / prj.STAGE_DIRS[stage]
 
 

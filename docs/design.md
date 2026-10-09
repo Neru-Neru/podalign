@@ -19,7 +19,7 @@
 | ロール | 内容 | 用途 |
 |---|---|---|
 | `speaker_a/b/c` | 各自のローカル録音 3本 | 最終ミックスの実体 |
-| `reference` | 全員の声が入った通話録音 1本 | **同期の基準としてのみ使用。ミックスには含めない** |
+| `reference` | 全員の声が入った通話録音 1本 | **同期とTrim確認に使用。ミックスには含めない** |
 | `jingle` | イントロ 1本 | 冒頭に配置 |
 | `bgm` | 1本 | ループ + ダッキング |
 
@@ -40,6 +40,7 @@
 |---|---|
 | F-1 | 6ファイルをロール指定でアップロードできる(大容量・レジューム対応) |
 | F-2 | リファレンスを基準に3トラックを時間軸で同期する(オフセット+ドリフト) |
+| F-2a | Sync後に4トラック(話者A/B/C・reference)を同じ範囲で手動Trimし、承認後にCleanupへ進む |
 | F-3 | トラックごとにノイズ除去・整音を行う |
 | F-4 | コンプレッサー・EQ でダイナミクスを整える |
 | F-5 | ジングル配置、BGM ループ、サイドチェインダッキングを含むミックスを行う |
@@ -144,7 +145,7 @@ data/<project-id>/
     },
     "reference": {...}, "jingle": {...}, "bgm": {...}
   },
-  "stage_order": ["ingest","sync","cleanup","dynamics","mix","master","export"],
+  "stage_order": ["ingest","sync","trim","cleanup","dynamics","mix","master","export"],
   "stages": {
     "sync": {
       "params": { "drift_threshold_ppm": 5.0, "n_segments": 10 },
@@ -163,6 +164,14 @@ data/<project-id>/
         "drift_ppm":   { "speaker_a": 12.3, ... },
         "residual_ms": { "speaker_a": 0.4, ... },
         "warnings": []
+      }
+    },
+    "trim": {
+      "params": { "start_s": 0.0, "end_s": null },
+      "report": {
+        "requested_start_s": 0.0, "requested_end_s": null,
+        "applied_start_s": 0.0, "applied_end_s": 3600.0,
+        "output_length_s": 3600.0, "start_sample": 0, "end_sample": 172800000
       }
     }
   }
@@ -183,21 +192,30 @@ pending ──run──> running ──成功──> done ──approve──> a
    └──────── 上流変更で input_fingerprint 不一致 ────────┘  → stale
 ```
 
-**設計の要**: 各ステージを「入力指紋 + パラメータ」で決まる純粋関数として扱う。上流成果物やパラメータが変われば `input_fingerprint` が変わり、**下流ステージが自動的に stale になる**。これにより「Stage 2 のパラメータだけ直して、そこから下だけ再実行」が静かに壊れない。DB なしでもこの性質は保てる。
+**設計の要**: 各ステージを「入力指紋 + パラメータ」で決まる純粋関数として扱う。上流成果物やパラメータが変われば `input_fingerprint` が変わり、**下流ステージが自動的に stale になる**。これにより「Trimのパラメータだけ直して、そこから下だけ再実行」が静かに壊れない。DB なしでもこの性質は保てる。
 
 この決定性は §6 の中間成果物 GC の前提でもある(消しても上流から再生成できる)。
 
 ---
 
-## 5. 同期後の共通タイムライン
+## 5. 同期後の共通タイムラインと手動Trim
 
 Stage 1 の出力仕様として明示する: **reference の t=0 を共通原点とし、3話者を同一長
 (3本の補正後長の最大)へ無音パド/トリムして出力する。** 以降の全ステージ・波形表示・
 A/B 比較はこの共通時間軸に乗る。
 
-これを仕様化しないと、Stage 4 の `amix`(既定 `duration=longest`)が暗黙にパドして
+これを仕様化しないと、Stage 5 の `amix`(既定 `duration=longest`)が暗黙にパドして
 動いてしまう一方、話者ごとの録音開始・終了は数十秒ずれうるため、A/B 比較や波形表示の
 時間軸が揃わない。
+
+新規プロジェクトでは Sync の後に独立した Trim ステージを置く。Trim の params は
+`start_s`(既定 0) と `end_s`(既定は Sync の `program_length_samples`)で、サーバー側で
+`0 <= start_s < end_s <= program_length_samples / 48000` を検証し、48kHzサンプル単位へ丸める。
+共通時間軸の長さは丸めた秒数ではなく整数サンプルで保存する。
+4トラックへ同じ `[start_s, end_s)` を `atrim` と `asetpts=PTS-STARTPTS` で適用し、
+`speaker_a.flac` / `speaker_b.flac` / `speaker_c.flac` / `reference.flac` と
+プレビュー・peaksを生成する。Trimを承認するまでCleanup以降は実行できない。
+旧 `project.json` は旧 `stage_order` のまま扱い、移行は行わない。
 
 ---
 
@@ -215,7 +233,7 @@ A/B 比較はこの共通時間軸に乗る。
 
 可逆圧縮・ffmpeg ネイティブなのでパイプラインの形は変わらない。実測では合成音声(flite)で 31.8% まで縮んだが、これはノイズフロアが無い理想信号のため、**実録音では 50〜60% を見込む**(上表はこの前提)。
 
-float32 の「クリップしない」利点は失うが、各ステージで -20 LUFS 管理されておりピークは -3dBFS 程度に収まるため 24bit(144dB) で足りる。ただし **Stage 4 の3本合算のみ最大 +9.5dB 増えうる**ため、mix 段の入力側でゲインを引く。
+float32 の「クリップしない」利点は失うが、各ステージで -20 LUFS 管理されておりピークは -3dBFS 程度に収まるため 24bit(144dB) で足りる。ただし **Stage 5 の3本合算のみ最大 +9.5dB 増えうる**ため、mix 段の入力側でゲインを引く。
 
 ### 6.2 中間フル解像度を「キャッシュ」として扱う
 
@@ -239,7 +257,7 @@ GC ポリシー: 直近2ステージ分は残す(再実行が速い)。それ以
 ### Stage 0 — Ingest(取り込み・検証)
 
 - `ffprobe` で全ファイルのサンプルレート / チャンネル / 長さ / コーデックを取得
-- 作業フォーマットへ統一: **話者・reference は 48kHz / モノ / FLAC 24bit**(話者は本質的にモノ、reference は同期解析専用)。**BGM・ジングルは 2ch に固定**(モノ素材が来ても Stage 4 の acrossfade/amix でチャンネル数が揃うように)
+- 作業フォーマットへ統一: **話者・reference は 48kHz / モノ / FLAC 24bit**(話者は本質的にモノ、reference は同期解析とTrim確認用)。**BGM・ジングルは 2ch に固定**(モノ素材が来ても Stage 5 の acrossfade/amix でチャンネル数が揃うように)
 - QC 検出: クリッピング率、DC オフセット、無音率、長さの不一致
 - `peaks.json` と `preview.opus` を生成
 
@@ -288,7 +306,14 @@ lag = argmax(R)
 
 **UI 確認**: 補正前後の「時間 vs ずれ」グラフ、3トラック重ね波形、代表箇所の同時再生。
 
-### Stage 2 — Cleanup(話者ごとの整音)
+### Stage 2 — Trim(収録前後の手動切り出し)
+
+- 話者A/B/Cとreferenceの4本を同一時間軸で波形表示する
+- 範囲ドラッグまたは左右ハンドルで共通範囲を編集し、再実行時に全トラックへ同じ範囲を適用する
+- 自動無音検出、間の詰め、トラック別範囲、開始・終了の余白は扱わない
+- 指定値、サンプル単位へ丸めた実適用値、出力長をレポートへ保存する
+
+### Stage 3 — Cleanup(話者ごとの整音)
 
 **順序が音質を決める。** 各話者トラックに順に適用:
 
@@ -302,17 +327,17 @@ lag = argmax(R)
 6. **ノイズゲート** — `agate=threshold=<ノイズフロア+6dB>:range=-12dB:attack=10:release=250`
    - **完全カットせず `range` で -12dB 減衰に留める**(切りすぎると呼吸が消えて不自然)
 7. **話者間ラウドネス整合** — `ebur128` で Integrated を測定し **`volume=<-20−測定値>dB` の純線形ゲインで各トラックを -20 LUFS に揃える**
-   - これを Stage 3 の前にやらないと、元レベル差のせいで話者ごとにコンプの効きがバラつく
-   - **loudnorm は使わない**: linear=true でも TP 制約に当たると無告知でダイナミックモードに落ち中間段で音を潰す。かつ最重フィルタ(53x — §7.1)を3本×2パス節約できる(約1.1分短縮)。ピーク管理は §6.1 の mix 入力ゲインと Stage 5 が担う。loudnorm の 2パス運用は最終マスタリング(Stage 5)専用
+   - これを Stage 4 の前にやらないと、元レベル差のせいで話者ごとにコンプの効きがバラつく
+   - **loudnorm は使わない**: linear=true でも TP 制約に当たると無告知でダイナミックモードに落ち中間段で音を潰す。かつ最重フィルタ(53x — §7.1)を3本×2パス節約できる(約1.1分短縮)。ピーク管理は §6.1 の mix 入力ゲインと Stage 6 が担う。loudnorm の 2パス運用は最終マスタリング(Stage 6)専用
 
-### Stage 3 — Dynamics(コンプ・EQ)
+### Stage 4 — Dynamics(コンプ・EQ)
 
 1. **コンプ1段目(グルー)**: `acompressor=threshold=-20dB:ratio=2.5:attack=10:release=150`
 2. **コンプ2段目(ピーク)**: `acompressor=threshold=-12dB:ratio=6:attack=2:release=60`
    - **2段に分ける理由**: 1段で強く掛けるより明確に自然。放送・Podcast の定番手法
 3. **EQ(任意・既定は控えめ)**: 3–5kHz を +2dB(明瞭度)、200–300Hz を -2dB(こもり除去)
 
-### Stage 4 — Mix
+### Stage 5 — Mix
 
 1. **ステレオ配置** — 3話者を L(-30%) / C / R(+30%) に**薄く**パン。深くパンするとモノ再生で破綻する
 2. **話者バス合成** — `amix=inputs=3:normalize=0`
@@ -328,7 +353,7 @@ lag = argmax(R)
    - **無いと BGM が声を潰す。Podcast では必須**
 6. **BGM ベースレベル** — 話者バスに対し -22〜-26 LUFS 相当
 
-### Stage 5 — Master
+### Stage 6 — Master
 
 1. **ラウドネスノーマライズ** — `loudnorm` を**必ず2パス**
    - 1パス目: `loudnorm=print_format=json` で `measured_I / measured_LRA / measured_TP / measured_thresh` を取得
@@ -342,7 +367,7 @@ lag = argmax(R)
    - **-1.0 dBTP にする理由**: MP3/AAC エンコード時にピークが上がるため 0 dBFS だと再生側でクリップする
 3. **最終測定** — `ebur128` で I / LRA / TP / 位相相関を測り目標との差分をレポート
 
-### Stage 6 — Export
+### Stage 7 — Export
 
 WAV 48kHz/24bit(保管用)、MP3 192kbps CBR、AAC 128kbps、メタデータ埋め込み、QC レポート JSON。
 
@@ -393,6 +418,7 @@ WAV 48kHz/24bit(保管用)、MP3 192kbps CBR、AAC 128kbps、メタデータ埋�
 - 承認済みは折りたたみ。上流変更で stale になったステージに赤バッジ
 - **A/B 比較プレイヤー**(処理前/後を同じ再生位置のまま切替)← **整音の良し悪しはこれ無しに判断できない。最優先で実装する**
 - Stage 1 は専用ビュー: 「時間 vs ずれ」グラフ、3トラック重ね波形、残差表示
+- Stage 2 は専用ビュー: 4トラックの共通時間軸、範囲ドラッグ・左右ハンドル、指定時刻表示
 - サイドに **プロジェクト容量 + purge ボタン**
 
 波形は事前計算済み `peaks.json` を自前の Canvas コンポーネント(約60行)で描画する。使う機能が「peaks 描画+クリックシーク+再生カーソル」のみで、wavesurfer.js の残り機能(ズーム・リージョン・デコード)は不要のため依存を持たない。Vite ビルド成果物を FastAPI が配信し、Docker 1コンテナで完結させる。
@@ -414,9 +440,9 @@ podalign/
 │     ├─ base.py             # Stage 共通インターフェース
 │     ├─ ffmpeg.py           # ffmpeg/ffprobe ラッパ, filter_complex builder, f32leパイプ
 │     ├─ analysis.py         # GCC-PHAT / ノイズプロファイル / ラウドネス測定 / peaks生成
-│     └─ s0_ingest.py … s6_export.py
+│     └─ s0_ingest.py … s6_export.py / s2_trim.py
 ├─ web/                      # React + TS + Vite
-│  └─ src/components/{ProjectList,Pipeline,StagePanel,ABPlayer,Waveform,SyncView,Uploader}.tsx
+│  └─ src/components/{ProjectList,Pipeline,StagePanel,ABPlayer,Waveform,SyncView,TrimView,Uploader}.tsx
 ├─ presets/default.json      # 既定パラメータ(YAML パーサ依存を避け JSON)
 ├─ tests/
 ├─ Dockerfile                # python + ffmpeg + ビルド済み web
@@ -462,9 +488,14 @@ podalign/
 
 ### 12.4 stale 判定の検証 — `tests/test_stale.py`
 
-Stage 2 のパラメータを変更したとき、Stage 3 以降が stale になり Stage 0/1 は影響を受けないことを確認。
+Trim のパラメータを変更したとき、Trim自身とCleanup以降が stale になり、Ingest/Sync は影響を受けないことを確認。
 
-### 12.5 実素材エンドツーエンド
+### 12.5 Trim の検証
+
+全範囲・指定範囲・`start >= end`・範囲外を検証し、48kHzサンプル境界、全トラックの同一長、
+出力の先頭が0秒であることを確認する。E2EではTrimの実行・承認後にCleanup以降を実行する。
+
+### 12.6 実素材エンドツーエンド
 
 実素材6本を投入し全ステージを承認しながら通す。処理時間を実測し UI の見積もり表示に反映(合成素材の E2E は 12.2/12.3 で自動化済み。実素材での検証は運用で実施)。
 
@@ -498,7 +529,8 @@ cleanup ステージだけは判定余裕が薄い。cleanup のみ 128kbps と�
 
 ## 14. スコープ外
 
-無音カット・間の詰め / 文字起こし・SRT・チャプター / フィラー除去 / 認証・マルチユーザー。
+自動無音検出・自動的な間の詰め・フィラー除去 / トラック別Trim / 開始・終了の余白指定 /
+文字起こし・SRT・チャプター / 認証・マルチユーザー。
 
 ステージは共通インターフェース(§7 冒頭)で定義し `project.json` の `stage_order` に順序を
 持たせるため、後から工程を差し込める(文字起こし系は GPU 前提になるため足す場合は要件再検討)。

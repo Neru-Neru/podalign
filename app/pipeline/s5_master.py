@@ -1,4 +1,4 @@
-"""Stage 5 — Master。
+"""Stage 6 — Master。
 
 loudnorm は必ず2パス(1パスのダイナミックモードは音を潰す — §7)。
 alimiter はサンプルピークの安全網で、真の TP 制御は loudnorm の TP=-1.5 が担う(R-2)。

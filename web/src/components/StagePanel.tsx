@@ -2,24 +2,47 @@ import { useEffect, useState } from "react";
 import { Project, StageState, api, STAGE_LABELS } from "../api";
 import ABPlayer from "./ABPlayer";
 import SyncView from "./SyncView";
+import TrimView from "./TrimView";
 
 const SPEAKERS = ["speaker_a", "speaker_b", "speaker_c"];
+const LEGACY_STAGE_LABELS: Record<string, string> = {
+  cleanup: "2. Cleanup(整音)", dynamics: "3. Dynamics(コンプ・EQ)",
+  mix: "4. Mix", master: "5. Master", export: "6. Export",
+};
+
+function stageLabel(stage: string, project: Project): string {
+  return !project.stage_order.includes("trim")
+    ? (LEGACY_STAGE_LABELS[stage] ?? STAGE_LABELS[stage])
+    : STAGE_LABELS[stage];
+}
 
 /** ステージごとの試聴トラックと A/B 比較先(処理前 = 上流ステージの同トラック) */
-function tracksFor(stage: string): { name: string; ab?: { stage: string; name: string }; peaks?: boolean }[] {
+function tracksFor(stage: string, project: Project): { name: string; ab?: { stage: string; name: string }; peaks?: boolean }[] {
+  const speakers = SPEAKERS;
   switch (stage) {
     case "ingest":
-      return ["speaker_a", "speaker_b", "speaker_c", "reference", "jingle", "bgm"]
+      return [...speakers, "reference", "jingle", "bgm"]
         .map(name => ({ name, peaks: true }));
     case "sync":
       return [
         { name: "mix_check", peaks: false },
-        ...SPEAKERS.map(name => ({ name, ab: { stage: "ingest", name }, peaks: true })),
+        ...speakers.map(name => ({ name, ab: { stage: "ingest", name }, peaks: true })),
       ];
+    case "trim":
+      return [...speakers, "reference"]
+        .map(name => ({
+          name,
+          ab: { stage: name === "reference" ? "ingest" : "sync", name },
+          peaks: true,
+        }));
     case "cleanup":
-      return SPEAKERS.map(name => ({ name, ab: { stage: "sync", name }, peaks: true }));
+      return speakers.map(name => ({
+        name,
+        ab: { stage: project.stage_order.includes("trim") ? "trim" : "sync", name },
+        peaks: true,
+      }));
     case "dynamics":
-      return SPEAKERS.map(name => ({ name, ab: { stage: "cleanup", name }, peaks: true }));
+      return speakers.map(name => ({ name, ab: { stage: "cleanup", name }, peaks: true }));
     case "mix":
       return [{ name: "mix", peaks: true }];
     case "master":
@@ -109,6 +132,15 @@ function StageReport({ stage, state }: { stage: string; state: StageState }) {
     );
   }
   if (stage === "sync") return <SyncView stage={state} />;
+  if (stage === "trim") {
+    return <ReportTable rows={[
+      ["指定開始", r.requested_start_s == null ? "0 (既定)" : `${r.requested_start_s} 秒`],
+      ["指定終了", r.requested_end_s == null ? "Sync の全長 (既定)" : `${r.requested_end_s} 秒`],
+      ["適用範囲", `${r.applied_start_s} - ${r.applied_end_s} 秒`],
+      ["出力長", `${r.output_length_s} 秒`],
+      ["境界", `${r.start_sample} - ${r.end_sample} samples @ ${r.sample_rate}Hz`],
+    ]} />;
+  }
   if (stage === "cleanup") {
     return (
       <div className="report">
@@ -201,7 +233,7 @@ export default function StagePanel({
   return (
     <div className={`card ${open ? "" : "collapsed"}`}>
       <div className="stage-head" onClick={() => setOpen(o => !o)}>
-        <h3>{STAGE_LABELS[stage]}</h3>
+        <h3>{stageLabel(stage, project)}</h3>
         {status === "running" && state.progress && (
           <span className="progress-msg">{state.progress}</span>
         )}
@@ -209,7 +241,16 @@ export default function StagePanel({
       </div>
       {open && (
         <div onClick={e => e.stopPropagation()}>
-          {Object.keys(params).length > 0 && (
+          {stage === "trim" ? (
+            <TrimView
+              projectId={project.id} speakers={SPEAKERS} params={params}
+              programLengthSamples={Number(project.stages.sync?.report?.program_length_samples ?? 0)}
+              onChange={(start, end) => {
+                setParam(["start_s"], start);
+                setParam(["end_s"], end);
+              }}
+            />
+          ) : Object.keys(params).length > 0 && (
             <div className="params">
               <ParamFields value={params} path={[]} onChange={setParam} />
             </div>
@@ -250,7 +291,7 @@ export default function StagePanel({
                 </div>
               ) : (
                 <div style={{ marginTop: 12 }}>
-                  {tracksFor(stage).map(t => (
+                  {tracksFor(stage, project).map(t => (
                     <ABPlayer
                       key={t.name}
                       label={t.name}

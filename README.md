@@ -28,6 +28,11 @@ podalign uses the call recording as a reference to automatically measure
 them, and then double-checks that the remaining error is within a
 thousandth of a second — warning you on screen if it isn't.
 
+After Sync, a manual Trim stage shows speaker A/B/C and the reference track
+on one shared timeline. Drag the selection or its left/right handles to cut
+the same range from all four tracks. Automatic silence detection and gap
+shortening are intentionally not part of this stage.
+
 After that, it handles the standard podcast finishing steps for you:
 
 - Removing noise and electrical hum
@@ -138,11 +143,12 @@ its upstream artifacts + parameters.
 |---|---|
 | 0 Ingest | ffprobe validation → unify to 48 kHz / FLAC 24-bit → clipping / DC / silence QC |
 | 1 Sync | offset + clock-drift estimation and correction |
-| 2 Cleanup | high-pass 80 Hz → auto hum notch (50/60 Hz detection) → declick/declip → `afftdn` NR (≤12 dB) → de-esser → gentle gate → linear gain to -20 LUFS |
-| 3 Dynamics | two-stage compression (glue 2.5:1 → peak 6:1) + subtle EQ |
-| 4 Mix | L/C/R micro-panning → `amix` → seamlessly looped BGM with sidechain ducking → jingle crossfade |
-| 5 Master | two-pass linear `loudnorm` to -16 LUFS / -1.5 dBTP → safety limiter -1.0 dB |
-| 6 Export | WAV 24-bit / MP3 192k CBR / AAC 128k + QC report |
+| 2 Trim | manually select one shared range from four waveforms and trim at 48 kHz sample boundaries |
+| 3 Cleanup | high-pass 80 Hz → auto hum notch (50/60 Hz detection) → declick/declip → `afftdn` NR (≤12 dB) → de-esser → gentle gate → linear gain to -20 LUFS |
+| 4 Dynamics | two-stage compression (glue 2.5:1 → peak 6:1) + subtle EQ |
+| 5 Mix | L/C/R micro-panning → `amix` → seamlessly looped BGM with sidechain ducking → jingle crossfade |
+| 6 Master | two-pass linear `loudnorm` to -16 LUFS / -1.5 dBTP → safety limiter -1.0 dB |
+| 7 Export | WAV 24-bit / MP3 192k CBR / AAC 128k + QC report |
 
 </details>
 

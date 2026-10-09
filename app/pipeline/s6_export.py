@@ -1,4 +1,4 @@
-"""Stage 6 — Export。
+"""Stage 7 — Export。
 
 WAV 48kHz/24bit(保管用)/ MP3 192kbps CBR / AAC 128kbps + メタデータ + QC レポート。
 書き出しは「永続」扱いで GC 対象にしない(§6.2)。

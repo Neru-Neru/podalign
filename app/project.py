@@ -21,13 +21,16 @@ from pathlib import Path
 
 DATA_DIR = Path(os.environ.get("PODCAST_DATA_DIR", "data"))
 
-STAGE_ORDER = ["ingest", "sync", "cleanup", "dynamics", "mix", "master", "export"]
+STAGE_ORDER = ["ingest", "sync", "trim", "cleanup", "dynamics", "mix", "master", "export"]
 STAGE_DIRS = {name: f"{i:02d}_{name}" for i, name in enumerate(STAGE_ORDER)}
 ROLES = ["speaker_a", "speaker_b", "speaker_c", "reference", "jingle", "bgm"]
 
 _BUILTIN_PARAMS: dict[str, dict] = {
     "ingest": {},
     "sync": {"drift_threshold_ppm": 5.0, "n_segments": 10, "segment_s": 30.0},
+    # end_s は Sync の program_length_samples を意味する動的既定値。Sync 実行前には
+    # 長さが分からないため null で保存し、Trim 実行時に解決する。
+    "trim": {"start_s": 0.0, "end_s": None},
     "cleanup": {
         "highpass_hz": 80,
         "nr_max_db": 12.0,
@@ -99,10 +102,12 @@ def create_project(name: str) -> dict:
         "name": name or project_id,
         "created_at": now_iso(),
         "assets": {},
-        "stage_order": STAGE_ORDER,
+        "stage_order": list(STAGE_ORDER),
         "stages": {
             s: {
-                "params": DEFAULT_PARAMS[s],
+                # プロジェクトごとの編集が他の新規プロジェクトやテストへ
+                # 漏れないよう、既定値を参照共有しない。
+                "params": json.loads(json.dumps(DEFAULT_PARAMS[s])),
                 "input_fingerprint": None,
                 "status": "pending",
                 "artifacts_evicted": False,

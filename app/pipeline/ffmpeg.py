@@ -77,7 +77,7 @@ def probe(path: str | Path) -> dict:
     cmd = [
         FFPROBE, "-hide_banner", "-v", "error",
         "-show_entries",
-        "stream=codec_name,sample_rate,channels,duration:format=duration,size",
+        "stream=codec_name,sample_rate,channels,duration,start_time:format=duration,size",
         "-of", "json", str(path),
     ]
     proc = subprocess.run(cmd, capture_output=True)
@@ -87,11 +87,16 @@ def probe(path: str | Path) -> dict:
     stream = next((s for s in info.get("streams", []) if "sample_rate" in s), {})
     fmt = info.get("format", {})
     duration = float(stream.get("duration") or fmt.get("duration") or 0.0)
+    try:
+        start_time = float(stream.get("start_time") or 0.0)
+    except (TypeError, ValueError):
+        start_time = 0.0
     return {
         "codec": stream.get("codec_name"),
         "sample_rate": int(stream.get("sample_rate", 0)),
         "channels": int(stream.get("channels", 0)),
         "duration": duration,
+        "start_time": start_time,
         "bytes": int(fmt.get("size", 0)),
     }
 

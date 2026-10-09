@@ -1,7 +1,7 @@
 """Stage 0 — Ingest(取り込み・検証)。
 
 作業フォーマットへ統一: 話者 48kHz/モノ/FLAC24。BGM・ジングルはステレオ維持。
-reference は同期解析専用なのでモノ化して保持する。
+reference は同期解析とTrim確認用なのでモノ化して保持する。
 QC: クリッピング率 / DC オフセット / 無音率 / 長さの不一致。
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ def run(ctx: StageContext, params: dict) -> dict:
         out = ctx.out_dir / f"{role}.flac"
         args = ["-i", str(src), "-ar", "48000"]
         # 話者/reference はモノ、jingle/bgm は 2ch に固定
-        # (モノ素材が来ても Stage 4 の acrossfade/amix でチャンネル数を揃えるため)
+        # (モノ素材が来ても Stage 4 の amix でチャンネル数を揃えるため)
         args += ["-ac", "1"] if mono else ["-ac", "2"]
         ffmpeg.run(args + [*ffmpeg.FLAC24, str(out)])
 

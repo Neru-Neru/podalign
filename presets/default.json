@@ -1,6 +1,7 @@
 {
   "ingest": {},
   "sync": { "drift_threshold_ppm": 5.0, "n_segments": 10, "segment_s": 30.0 },
+  "trim": { "start_s": 0.0, "end_s": null },
   "cleanup": {
     "highpass_hz": 80,
     "nr_max_db": 12.0,

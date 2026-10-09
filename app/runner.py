@@ -16,11 +16,11 @@ from . import storage
 from .pipeline import ffmpeg
 from .pipeline.base import SPEAKERS, StageContext
 from .pipeline import (
-    s0_ingest, s1_sync, s2_cleanup, s3_dynamics, s4_mix, s5_master, s6_export,
+    s0_ingest, s1_sync, s2_trim, s2_cleanup, s3_dynamics, s4_mix, s5_master, s6_export,
 )
 
 STAGE_MODULES = {
-    "ingest": s0_ingest, "sync": s1_sync, "cleanup": s2_cleanup,
+    "ingest": s0_ingest, "sync": s1_sync, "trim": s2_trim, "cleanup": s2_cleanup,
     "dynamics": s3_dynamics, "mix": s4_mix, "master": s5_master,
     "export": s6_export,
 }
@@ -28,7 +28,8 @@ STAGE_MODULES = {
 # 各ステージが読む上流と、再生成判定に使う必須成果物
 REQUIRED_ARTIFACTS = {
     "ingest": [f"{r}.flac" for r in prj.ROLES],
-    "sync": [f"{r}.flac" for r in SPEAKERS],
+    "sync": [f"{r}.flac" for r in (*SPEAKERS, "reference")],
+    "trim": [f"{r}.flac" for r in (*SPEAKERS, "reference")],
     "cleanup": [f"{r}.flac" for r in SPEAKERS],
     "dynamics": [f"{r}.flac" for r in SPEAKERS],
     "mix": ["mix.flac"],
@@ -57,6 +58,8 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
                 raise NotRunnable("素材6本のアップロードが完了していません")
             statuses = prj.effective_status(doc)
             order = doc["stage_order"]
+            if stage not in order:
+                raise NotRunnable(f"プロジェクトにステージ {stage} はありません")
             for upstream in order[: order.index(stage)]:
                 if statuses[upstream] != "approved":
                     raise NotRunnable(
@@ -65,7 +68,28 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
             _check_disk(doc)
             st = doc["stages"][stage]
             if params:
-                st["params"] = params
+                if stage == "trim":
+                    # 部分指定でも既定値を失わないように Trim だけはマージする。
+                    candidate = dict(st["params"])
+                    candidate.update(params)
+                    try:
+                        s2_trim.resolve_bounds(
+                            candidate,
+                            doc["stages"]["sync"]["report"].get("program_length_samples", 0),
+                        )
+                    except ValueError as exc:
+                        raise NotRunnable(str(exc)) from exc
+                    st["params"] = candidate
+                else:
+                    st["params"] = params
+            elif stage == "trim":
+                try:
+                    s2_trim.resolve_bounds(
+                        st["params"],
+                        doc["stages"]["sync"]["report"].get("program_length_samples", 0),
+                    )
+                except ValueError as exc:
+                    raise NotRunnable(str(exc)) from exc
             st["status"] = "running"
             st["progress"] = "開始待ち"
             st["started_at"] = prj.now_iso()

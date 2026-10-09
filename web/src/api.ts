@@ -52,11 +52,12 @@ export const ROLE_LABELS: Record<string, string> = {
 export const STAGE_LABELS: Record<string, string> = {
   ingest: "0. Ingest(取り込み・検証)",
   sync: "1. Sync(音合わせ)",
-  cleanup: "2. Cleanup(整音)",
-  dynamics: "3. Dynamics(コンプ・EQ)",
-  mix: "4. Mix",
-  master: "5. Master",
-  export: "6. Export",
+  trim: "2. Trim(手動切り出し)",
+  cleanup: "3. Cleanup(整音)",
+  dynamics: "4. Dynamics(コンプ・EQ)",
+  mix: "5. Mix",
+  master: "6. Master",
+  export: "7. Export",
 };
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {

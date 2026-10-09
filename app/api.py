@@ -135,8 +135,8 @@ def _finalize_asset(project_id: str, role: str) -> None:
 
 @router.post("/projects/{project_id}/stages/{stage}/run")
 async def run_stage(project_id: str, stage: str, request: Request):
-    _load_or_404(project_id)
-    if stage not in prj.STAGE_ORDER:
+    doc = _load_or_404(project_id)
+    if stage not in doc["stage_order"]:
         raise HTTPException(400, f"不明なステージ: {stage}")
     body = await request.json() if int(request.headers.get("content-length") or 0) else {}
     try:
@@ -150,8 +150,8 @@ async def run_stage(project_id: str, stage: str, request: Request):
 
 @router.post("/projects/{project_id}/stages/{stage}/approve")
 def approve_stage(project_id: str, stage: str):
-    _load_or_404(project_id)
-    if stage not in prj.STAGE_ORDER:
+    doc = _load_or_404(project_id)
+    if stage not in doc["stage_order"]:
         raise HTTPException(400, f"不明なステージ: {stage}")
     try:
         runner.approve(project_id, stage)
@@ -164,8 +164,8 @@ _FILE_NAME_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 
 
 def _stage_file(project_id: str, stage: str, prefix: str, name: str, suffix: str):
-    _load_or_404(project_id)
-    if stage not in prj.STAGE_ORDER or not _FILE_NAME_RE.match(name):
+    doc = _load_or_404(project_id)
+    if stage not in doc["stage_order"] or not _FILE_NAME_RE.match(name):
         raise HTTPException(404)
     path = storage.stage_dir(project_id, stage) / f"{prefix}_{name}{suffix}"
     if not path.exists():

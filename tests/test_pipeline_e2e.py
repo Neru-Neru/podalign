@@ -44,13 +44,15 @@ def project(data_dir) -> dict:
     # 3話者: 帯域の違う発話様バースト。reference = 各話者を「話者が先行」する形で合成
     # (off = 話者時刻 − ref 時刻 > 0 → ref 側では話者素材の off 秒目から始まる)
     rng = np.random.default_rng(7)
+    roles = list(OFFSETS)
     voices = {}
-    for i, role in enumerate(["speaker_a", "speaker_b", "speaker_c"]):
+    for i, role in enumerate(roles):
         v = speechlike(seed=10 + i, dur=DUR, sr=SR) * 0.5
         voices[role] = v
     n = int(DUR * SR)
     ref = rng.standard_normal(n).astype(np.float32) * 1e-4
-    for role, off in OFFSETS.items():
+    for role in roles:
+        off = OFFSETS[role]
         shift = int(round(off * SR))
         v = voices[role]
         if shift >= 0:
@@ -58,7 +60,7 @@ def project(data_dir) -> dict:
             ref[: len(seg)] += seg
         else:
             ref[-shift : -shift + len(v)][: n + shift] += v[: n + shift]
-    for role in OFFSETS:
+    for role in roles:
         _write_wav(assets / f"{role}.src.wav", voices[role])
     _write_wav(assets / "reference.src.wav", ref)
 
@@ -70,7 +72,7 @@ def project(data_dir) -> dict:
     _write_wav(assets / "bgm.src.wav", bgm)
 
     with prj.update(pid) as doc:
-        for role in prj.ROLES:
+        for role in [*roles, "reference", "jingle", "bgm"]:
             src = assets / f"{role}.src.wav"
             ff.run(["-i", str(src), "-c:a", "flac", str(assets / f"{role}.flac")])
             doc["assets"][role] = {
@@ -104,12 +106,36 @@ def test_full_pipeline(project):
     _run_and_approve(pid, "ingest")
 
     sync_report = _run_and_approve(pid, "sync")
-    for role, expected in OFFSETS.items():
+    assert sync_report["program_length_samples"] > 0
+    sync_dir = storage.stage_dir(pid, "sync")
+    # Trim編集画面が初回から読む話者とreferenceの共通時間軸成果物。
+    reference_info = ff.probe(sync_dir / "reference.flac")
+    assert reference_info["duration"] == pytest.approx(
+        sync_report["program_length_samples"] / SR, abs=1 / SR
+    )
+    assert (sync_dir / "preview_reference.opus").exists()
+    assert (sync_dir / "peaks_reference.json").exists()
+    assert set(sync_report["offsets_ms"]) == set(list(OFFSETS))
+    for role in list(OFFSETS):
+        expected = OFFSETS[role]
         got = sync_report["offsets_ms"][role] / 1e3
         assert abs(got - expected) < 1.5e-3, f"{role}: {got} vs {expected}"
         assert abs(sync_report["residual_ms"][role]) <= 1.0
         # 60秒素材にドリフトは仕込んでいない(ドリフトは test_sync で検証済み)
         assert not sync_report["drift_corrected"][role]
+
+    trim_report = _run_and_approve(pid, "trim")
+    assert trim_report["applied_start_s"] == 0.0
+    assert trim_report["end_sample"] == sync_report["program_length_samples"]
+    assert trim_report["output_length_s"] == pytest.approx(trim_report["program_length_s"], abs=1 / SR)
+    trim_dir = storage.stage_dir(pid, "trim")
+    trim_lengths = []
+    for role in (*list(OFFSETS), "reference"):
+        assert (trim_dir / f"{role}.flac").exists()
+        info = ff.probe(trim_dir / f"{role}.flac")
+        trim_lengths.append(info["duration"])
+        assert info["start_time"] == pytest.approx(0.0, abs=1e-6)
+    assert max(trim_lengths) - min(trim_lengths) <= 2 / SR
 
     _run_and_approve(pid, "cleanup")
     _run_and_approve(pid, "dynamics")
