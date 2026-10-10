@@ -123,6 +123,13 @@ Old generated files for the rerun stage are removed before processing; partial
 outputs are also removed on failure. This cleanup preserves source recordings,
 other stages, and completed Export files.
 
+**Q. Can I change how long the BGM continues after the speakers finish?**
+Set the BGM tail duration in Mix: 0 seconds ends with the speakers; 3 seconds
+keeps music for three more seconds. The start stays unchanged, with a fade-out
+over the final three seconds (or the whole BGM if shorter).
+New projects default to 3 seconds. Existing projects keep their previous timing
+until you set this field. Rerun and approve Mix, then rerun Master and Export.
+
 **Q. Does it work for 2-host or 4-host shows?**
 Two- and three-host episodes are supported. Upload at least two of speaker A/B/C; the third recording can be omitted. Four or more hosts are not supported.
 

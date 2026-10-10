@@ -97,6 +97,20 @@ const input = (index, value) => {
   project.stages.trim.params = { start_s: 2, end_s: 8 };
   render(); await wait(50); check([2, 8], 'changed saved settings');
   clearInterval(timer);
+  const mixProject = { ...project, stage_order: ['mix'], stages: { mix: stage({ bgm_tail_s: 3 }) } };
+  const renderMix = () => root.render(<StagePanel key="mix" project={structuredClone(mixProject)} stage="mix" anyRunning={false} onAction={() => {}} />);
+  const tailInput = () => [...document.querySelectorAll('label')].find(label => label.textContent.includes('話者終了後にBGMを残す時間')).querySelector('input');
+  renderMix(); await wait(50);
+  if (tailInput().value !== '3') throw Error('new Mix tail value missing');
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(tailInput(), '0');
+  tailInput().dispatchEvent(new Event('input', { bubbles: true })); await wait(20);
+  renderMix(); await wait(20);
+  if (tailInput().value !== '0') throw Error('Mix polling reset tail edit');
+  [...document.querySelectorAll('button')].find(b => b.textContent === '実行').click(); await wait(20);
+  if (submitted.params.bgm_tail_s !== 0) throw Error('Mix run did not submit zero tail');
+  mixProject.stages.mix.params = {};
+  renderMix(); await wait(50);
+  if (tailInput().value !== '' || !document.body.textContent.includes('従来の長さを維持')) throw Error('legacy Mix must keep its ending until edited');
   document.getElementById('result').textContent = 'PASS';
 })().catch(error => { document.getElementById('result').textContent = 'FAIL: ' + error.message; });
 ` },
@@ -111,7 +125,7 @@ const input = (index, value) => {
   if (!result.stdout?.includes('<pre id="result">PASS</pre>')) {
     throw Error(result.stdout?.match(/<pre id="result">(.*?)<\/pre>/)?.[1] || result.error?.message || result.stderr);
   }
-  console.log('PASS: Trim preview uses Sync audio, respects selection, handles errors; edits survive polling and submit correctly.');
+  console.log('PASS: Trim preview and polling; Mix tail edit submits zero and preserves legacy settings.');
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

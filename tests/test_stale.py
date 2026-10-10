@@ -65,6 +65,14 @@ def test_fingerprint_independent_of_artifacts(data_dir):
     assert prj.expected_fingerprints(doc) == before
 
 
+def test_bgm_tail_change_stales_mix_and_downstream_only(data_dir):
+    doc = _make_ready_project()
+    doc["stages"]["mix"]["params"]["bgm_tail_s"] = 0.0
+    statuses = prj.effective_status(doc)
+    assert all(statuses[stage] == "approved" for stage in ("ingest", "sync", "trim", "cleanup", "dynamics"))
+    assert all(statuses[stage] == "stale" for stage in ("mix", "master", "export"))
+
+
 def test_params_canonicalization(data_dir):
     """キー順が違うだけの params は同じ指紋になる。"""
     doc = _make_ready_project()

@@ -28,11 +28,7 @@ def _non_negative_seconds(value: object, name: str) -> float:
 
 
 def resolve_timing(params: dict, jingle_duration_s: float, voice_duration_s: float) -> dict[str, float | None]:
-    """Mix の開始指定を検証し、追従する自動開始を絶対時刻へ解決する。
-
-    BGM は話者バスと同じ長さだけ鳴らす。開始位置を遅らせても末尾の音楽を
-    切らないため、BGM の終了が番組全長を決めることがある。
-    """
+    """開始位置と話者終了後のBGM余韻から絶対時刻を解決する。"""
     jingle_duration_s = _non_negative_seconds(jingle_duration_s, "ジングル長")
     voice_duration_s = _non_negative_seconds(voice_duration_s, "話者バス長")
     jingle_start = _non_negative_seconds(params.get("jingle_start_s", 0.0), "jingle_start_s")
@@ -51,7 +47,12 @@ def resolve_timing(params: dict, jingle_duration_s: float, voice_duration_s: flo
     bgm_fade_in = _non_negative_seconds(params.get("bgm_fade_in_s", 2.0), "bgm_fade_in_s")
     jingle_end = jingle_start + jingle_duration_s
     voice_end = voice_start + voice_duration_s
-    bgm_end = bgm_start + voice_duration_s
+    # 未指定の既存プロジェクトは従来どおり話者と同じ長さだけBGMを流す。
+    raw_tail = params.get("bgm_tail_s")
+    bgm_end = (
+        bgm_start + voice_duration_s if raw_tail is None
+        else voice_end + _non_negative_seconds(raw_tail, "bgm_tail_s")
+    )
     return {
         "jingle_start_s": jingle_start,
         "voice_start_s": voice_start,
@@ -121,7 +122,9 @@ def run(ctx: StageContext, params: dict) -> dict:
     voice_start = float(timing["voice_start_s"])
     bgm_start = float(timing["bgm_start_s"])
     bgm_fade_in = float(timing["bgm_fade_in_s"])
-    bgm_play_len = voice_len
+    bgm_play_len = float(timing["bgm_end_s"]) - bgm_start
+    if bgm_play_len <= 0:
+        raise ValueError("BGM開始は話者終了＋BGMを残す時間より前に設定してください")
 
     # --- 2. BGM ループ単位(継ぎ目のプチノイズ防止 — §7) ---
     ctx.progress("mix: BGM ループ単位生成")

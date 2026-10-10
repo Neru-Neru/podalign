@@ -174,6 +174,17 @@ function MixFields({
         </label>
         <span className="muted">開始時に {seconds(params.bgm_fade_in_s ?? 2)} でフェードイン</span>
       </div>
+      <h4>終了タイミング</h4>
+      <div className="mix-timing-row">
+        <label>話者終了後にBGMを残す時間 (秒)
+          <input type="number" min="0" step="0.1" value={params.bgm_tail_s ?? ""}
+            placeholder="従来の長さ"
+            onChange={e => onChange(["bgm_tail_s"], e.target.value === "" ? null : Number(e.target.value))} />
+        </label>
+        <span className="muted">{params.bgm_tail_s == null
+          ? "未指定: 従来の長さを維持"
+          : `話者終了から ${seconds(params.bgm_tail_s)} 後に終了`}。最後の最大3秒でフェードアウト</span>
+      </div>
       <h4>ミックス設定</h4>
       <ParamFields value={{
         pan_width: params.pan_width, premix_gain_db: params.premix_gain_db,

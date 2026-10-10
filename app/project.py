@@ -66,6 +66,7 @@ _BUILTIN_PARAMS: dict[str, dict] = {
         "voice_start_s": None,
         "bgm_start_s": None,
         "bgm_fade_in_s": 2.0,
+        "bgm_tail_s": 3.0,
         "bgm_loop_crossfade_s": 2.0,
     },
     "master": {"target_i": -16.0, "target_tp": -1.5, "target_lra": 11.0},

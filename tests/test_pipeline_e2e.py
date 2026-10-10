@@ -145,6 +145,7 @@ def test_full_pipeline(project):
     assert mix_report["voice_start_s"] == pytest.approx(5.0, abs=1 / SR)
     assert mix_report["bgm_start_s"] == pytest.approx(15.0, abs=1 / SR)
     assert mix_report["bgm_fade_in_s"] == 2.0
+    assert mix_report["bgm_end_s"] == pytest.approx(mix_report["voice_end_s"] + 3.0, abs=0.001)
     mix_info = ff.probe(storage.stage_dir(pid, "mix") / "mix.flac")
     # レポートの秒数は小数3桁へ丸めている。
     assert mix_info["duration"] == pytest.approx(mix_report["program_length_s"], abs=0.0005 + 2 / SR)
