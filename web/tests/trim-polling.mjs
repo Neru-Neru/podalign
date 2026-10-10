@@ -22,6 +22,14 @@ const project = { id: 'test', name: 'test', assets_ready: true,
     trim: stage({ start_s: 0, end_s: null }),
   } };
 let submitted;
+let playing = false;
+let rejectPlay = false;
+HTMLMediaElement.prototype.play = function () {
+  if (rejectPlay) return Promise.reject(Error('play failed'));
+  playing = true;
+  return Promise.resolve();
+};
+HTMLMediaElement.prototype.pause = function () { playing = false; };
 window.fetch = async (url, options) => {
   if (String(url).endsWith('/run')) submitted = JSON.parse(options.body);
   return new Response(JSON.stringify({ peaks: [0.2, 0.4], duration: 10 }), { status: 200 });
@@ -43,6 +51,36 @@ const input = (index, value) => {
   input(0, 1); await wait(50);
   input(1, 9); await wait(50);
   check([1, 9], 'typed values');
+  const previewButton = () => [...document.querySelectorAll('button')].find(b => b.textContent === '選択範囲を試聴');
+  const audio = () => document.querySelector('audio');
+  const ready = async () => { audio().dispatchEvent(new Event('loadedmetadata')); await wait(20); };
+  if (!audio().src.includes('/stages/sync/preview?name=reference')) throw Error('preview must use Sync reference before Trim runs');
+  if (!previewButton().disabled) throw Error('preview enabled before metadata');
+  await ready();
+  previewButton().click(); await wait(20);
+  if (!playing || audio().currentTime !== 1 || submitted) throw Error('preview must start at selection without running Trim');
+  audio().currentTime = 8; audio().dispatchEvent(new Event('timeupdate'));
+  if (!playing) throw Error('preview stopped inside selection');
+  audio().currentTime = 9; audio().dispatchEvent(new Event('timeupdate'));
+  if (playing) throw Error('preview did not stop at selection end');
+  previewButton().click(); await wait(20);
+  input(0, 2); await wait(20);
+  if (playing) throw Error('selection edit must stop range playback');
+  input(0, 1); await wait(20);
+  const selector = document.querySelector('select');
+  if ([...selector.options].some(option => option.value === 'speaker_c')) throw Error('absent speaker offered');
+  selector.value = 'speaker_a'; selector.dispatchEvent(new Event('change', { bubbles: true })); await wait(20);
+  if (!audio().src.includes('/stages/sync/preview?name=speaker_a') || !previewButton().disabled) throw Error('track switch must reload Sync preview');
+  await ready();
+  rejectPlay = true; previewButton().click(); await wait(20);
+  if (!document.querySelector('[role="alert"]')) throw Error('play failure must be visible');
+  rejectPlay = false;
+  input(1, 1); await wait(20);
+  if (!previewButton().disabled) throw Error('empty selection preview enabled');
+  input(1, 9); await wait(20);
+  audio().dispatchEvent(new Event('error')); await wait(20);
+  if (!previewButton().disabled || !document.querySelector('[role="alert"]')) throw Error('load failure must disable range preview and show error');
+  await ready();
   const timer = setInterval(render, 1000);
   await wait(2200); check([1, 9], 'typed values after polling');
   const canvas = document.querySelector('canvas');
@@ -54,7 +92,7 @@ const input = (index, value) => {
   pointer('pointerdown', 0.1); pointer('pointermove', 0.3); await wait(50); pointer('pointerup', 0.3);
   check([3, 9], 'dragged handle');
   await wait(2200); check([3, 9], 'dragged handle after polling');
-  document.querySelector('button').click(); await wait(50);
+  [...document.querySelectorAll('button')].find(b => b.textContent === '実行').click(); await wait(50);
   if (submitted.params.start_s !== 3 || submitted.params.end_s !== 9) throw Error('run submitted old values');
   project.stages.trim.params = { start_s: 2, end_s: 8 };
   render(); await wait(50); check([2, 8], 'changed saved settings');
@@ -73,7 +111,7 @@ const input = (index, value) => {
   if (!result.stdout?.includes('<pre id="result">PASS</pre>')) {
     throw Error(result.stdout?.match(/<pre id="result">(.*?)<\/pre>/)?.[1] || result.error?.message || result.stderr);
   }
-  console.log('PASS: Trim input and drag survive polling; run submits edits; saved changes refresh.');
+  console.log('PASS: Trim preview uses Sync audio, respects selection, handles errors; edits survive polling and submit correctly.');
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

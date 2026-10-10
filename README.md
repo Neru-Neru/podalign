@@ -30,7 +30,9 @@ thousandth of a second — warning you on screen if it isn't.
 
 After Sync, a manual Trim stage shows speaker A/B/C and the reference track
 on one shared timeline. Drag the selection or its left/right handles to cut
-the same range from all three or four tracks. Automatic silence detection and gap
+the same range from all three or four tracks. Before running Trim, listen to the
+reference or individual speakers and preview the selected range.
+Automatic silence detection and gap
 shortening are intentionally not part of this stage.
 
 After that, it handles the standard podcast finishing steps for you:

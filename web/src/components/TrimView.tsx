@@ -34,6 +34,11 @@ export default function TrimView({
   );
   const programLengthS = programLengthSamples / SR;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const rangePlaying = useRef(false);
+  const [previewTrack, setPreviewTrack] = useState("reference");
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewError, setPreviewError] = useState("");
   const dragRef = useRef<{ mode: "start" | "end" | "range"; anchor: number; base: Selection } | null>(null);
   const [data, setData] = useState<Record<string, Peaks>>({});
   const [width, setWidth] = useState(0);
@@ -41,6 +46,27 @@ export default function TrimView({
     start: Number(params.start_s ?? 0),
     end: Number(params.end_s ?? programLengthS),
   });
+
+  useEffect(() => {
+    if (rangePlaying.current) {
+      audioRef.current?.pause();
+      rangePlaying.current = false;
+    }
+  }, [selection.start, selection.end]);
+
+  const playSelection = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setPreviewError("");
+    try {
+      audio.currentTime = selection.start;
+      rangePlaying.current = true;
+      await audio.play();
+    } catch {
+      rangePlaying.current = false;
+      setPreviewError("音声を再生できませんでした。もう一度試してください。");
+    }
+  };
 
   useEffect(() => {
     const next = {
@@ -188,6 +214,50 @@ export default function TrimView({
         </label>
         <span className="trim-length">選択長: {Math.max(0, selection.end - selection.start).toFixed(6)} 秒</span>
       </div>
+      {programLengthS > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="row">
+            <label>試聴する音声{" "}
+              <select value={previewTrack} onChange={e => {
+                audioRef.current?.pause();
+                rangePlaying.current = false;
+                setPreviewReady(false);
+                setPreviewError("");
+                setPreviewTrack(e.target.value);
+              }}>
+                {tracks.map(([name, label]) => <option key={name} value={name}>{label}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={playSelection}
+              disabled={!previewReady || !(selection.end > selection.start)}>
+              選択範囲を試聴
+            </button>
+          </div>
+          <p className="muted">再生バーで切り出し前の音声を自由に聴けます。選択範囲の試聴は開始時刻から再生し、終了時刻で止まります。</p>
+          <audio key={`${projectId}:${previewTrack}`} ref={audioRef} controls preload="metadata"
+            aria-label="切り出し前の音声"
+            src={api.previewUrl(projectId, "sync", previewTrack)}
+            style={{ width: "100%", height: 32 }}
+            onLoadStart={() => { setPreviewReady(false); rangePlaying.current = false; }}
+            onLoadedMetadata={() => { setPreviewReady(true); setPreviewError(""); }}
+            onPause={() => { rangePlaying.current = false; }}
+            onTimeUpdate={e => {
+              // shortcut: 試聴の停止精度はtimeupdate間隔に依存。厳密な試聴境界が必要になったら専用音声を生成する。
+              if (rangePlaying.current && (e.currentTarget.currentTime >= selection.end
+                || e.currentTarget.currentTime < selection.start)) {
+                e.currentTarget.pause();
+                rangePlaying.current = false;
+              }
+            }}
+            onError={() => {
+              setPreviewReady(false);
+              rangePlaying.current = false;
+              setPreviewError("試聴音声を読み込めませんでした。Syncの成果物を確認してください。");
+            }}
+          />
+          {previewError && <p className="log" role="alert">{previewError}</p>}
+        </div>
+      )}
     </div>
   );
 }
