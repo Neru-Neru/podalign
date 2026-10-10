@@ -54,15 +54,23 @@ Sync のあとには手動 Trim 工程があります。話者2〜3人と全体�
 
 ### Docker で動かす(おすすめ)
 
-[Docker](https://docs.docker.com/get-docker/) が入っていれば、次の 2 行で起動できます:
+[Docker](https://docs.docker.com/get-docker/)(Docker Compose を含む) と `make` が入っていれば、リポジトリのルートで次の 1 コマンドでビルドと起動ができます:
 
 ```bash
-docker build -t podalign .
-docker run -p 8000:8000 -v $(pwd)/data:/data podalign
+make start
 ```
 
 ブラウザで http://localhost:8000 を開けば準備完了です。
 必要なソフト(特別なビルドの ffmpeg)はすべて同梱されているので、他に準備はいりません。
+停止は `Ctrl+C`。音声やプロジェクトは `data/` に保存され、再起動後も残ります。
+
+`make` だけでも起動できます。`make stop` で停止とコンテナの片付けができます。
+音声・プロジェクト・完成ファイルもすべて削除する場合は、次のコマンドを実行してください。
+**削除は元に戻せないため、必要な完成ファイルは先にダウンロードしてください。**
+
+```bash
+make clean-data
+```
 
 ### Docker を使わない場合
 

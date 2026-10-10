@@ -59,16 +59,24 @@ Five or six audio files:
 
 ### With Docker (recommended)
 
-If you have [Docker](https://docs.docker.com/get-docker/), two commands get you running:
+With [Docker](https://docs.docker.com/get-docker/) (including Docker Compose) and `make`, run one command from the repository root to build and start the app:
 
 ```bash
-docker build -t podalign .
-docker run -p 8000:8000 -v $(pwd)/data:/data podalign
+make start
 ```
 
 Open http://localhost:8000 in your browser and you're set.
 Everything needed (including a special build of ffmpeg) is bundled — no other
 setup required.
+Stop with `Ctrl+C`. Audio and projects are saved in `data/` and survive restarts.
+
+Running just `make` also starts the app. `make stop` stops the app and removes its containers.
+To also delete all audio, projects, and exported files, run the command below.
+**Deletion cannot be undone. Download any exports you need first.**
+
+```bash
+make clean-data
+```
 
 ### Without Docker
 
