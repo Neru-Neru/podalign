@@ -56,6 +56,38 @@ const STATUS_LABELS: Record<string, string> = {
   failed: "失敗", approved: "承認済み", stale: "要再実行(上流が変更)",
 };
 
+const PARAM_LABELS: Record<string, string> = {
+  drift_threshold_ppm: "ドリフト補正のしきい値 (ppm)",
+  n_segments: "解析区間数",
+  segment_s: "解析区間の長さ (秒)",
+  highpass_hz: "低域カット周波数 (Hz)",
+  nr_max_db: "ノイズ除去の最大量 (dB)",
+  gate_range_db: "ゲートで下げる音量 (dB)",
+  target_lufs: "目標音量 (LUFS)",
+  deess_intensity: "歯擦音（サ行）の抑制強度",
+  comp1: "コンプレッサー1",
+  comp2: "コンプレッサー2",
+  threshold_db: "圧縮開始のしきい値 (dB)",
+  ratio: "圧縮比",
+  attack_ms: "圧縮がかかる速さ (ms)",
+  release_ms: "圧縮が戻る時間 (ms)",
+  eq_enabled: "音質調整（EQ）を有効にする",
+  eq_presence_db: "声の明瞭さの調整 (4 kHz / dB)",
+  eq_mud_db: "低域のこもりの調整 (250 Hz / dB)",
+  pan_width: "話者の左右の広がり",
+  premix_gain_db: "ミックス前の音量調整 (dB)",
+  bgm_bed_db: "BGMの基本音量 (dB)",
+  duck_threshold_db: "BGMを下げ始める声のしきい値 (dB)",
+  duck_ratio: "会話中にBGMを下げる圧縮比",
+  bgm_loop_crossfade_s: "BGMループのつなぎ時間 (秒)",
+  target_i: "目標音量 (LUFS)",
+  target_tp: "最大ピークの目標 (dBTP)",
+  target_lra: "音量の変動幅の目標 (LU)",
+  title: "タイトル",
+  artist: "アーティスト",
+  album: "アルバム",
+};
+
 /** ネストした params を再帰的に number/checkbox/text 入力へ展開する汎用エディタ */
 function ParamFields({
   value, path, onChange,
@@ -64,7 +96,7 @@ function ParamFields({
     <>
       {Object.entries(value).map(([key, v]) => {
         const p = [...path, key];
-        const label = path.length ? `${path.join(".")}.${key}` : key;
+        const label = p.map(part => PARAM_LABELS[part] ?? part).join(" / ");
         if (v !== null && typeof v === "object") {
           return <ParamFields key={key} value={v} path={p} onChange={onChange} />;
         }
