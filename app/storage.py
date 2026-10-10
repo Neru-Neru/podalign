@@ -62,6 +62,15 @@ def evictable_flacs(project_id: str, stage: str, keep_export: bool = True) -> li
     return [f for f in sdir.iterdir() if f.suffix == ".flac"]
 
 
+def clear_stage_artifacts(project_id: str, stage: str) -> None:
+    """再実行対象の生成物だけを削除する。Export の完成ファイルは保持する。"""
+    if stage == "export":
+        return
+    sdir = stage_dir(project_id, stage)
+    if sdir.exists():
+        shutil.rmtree(sdir)
+
+
 def gc(project_id: str, keep_recent: int = 2) -> dict:
     """中間 FLAC を purge する。直近 keep_recent ステージ分は残す(再実行が速い)。
 

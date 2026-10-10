@@ -119,6 +119,9 @@ again — so it's always safe to clean up.
 **Q. Can I redo a step I already approved?**
 Yes. When you change a setting, only the steps affected by it are redone;
 everything else stays as-is.
+Old generated files for the rerun stage are removed before processing; partial
+outputs are also removed on failure. This cleanup preserves source recordings,
+other stages, and completed Export files.
 
 **Q. Does it work for 2-host or 4-host shows?**
 Two- and three-host episodes are supported. Upload at least two of speaker A/B/C; the third recording can be omitted. Four or more hosts are not supported.

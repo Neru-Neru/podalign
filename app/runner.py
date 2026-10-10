@@ -179,8 +179,13 @@ def _execute(project_id: str, stage: str, regenerate: bool) -> None:
         doc=doc,
         progress=lambda msg: _set_progress(project_id, stage, msg),
     )
-    report = STAGE_MODULES[stage].run(ctx, params)
-    ctx.write_report(report)
+    storage.clear_stage_artifacts(project_id, stage)
+    try:
+        report = STAGE_MODULES[stage].run(ctx, params)
+        ctx.write_report(report)
+    except Exception:
+        storage.clear_stage_artifacts(project_id, stage)
+        raise
     fps = prj.expected_fingerprints(doc)
     with prj.update(project_id) as doc2:
         st = doc2["stages"][stage]
