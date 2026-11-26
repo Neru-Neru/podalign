@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 
@@ -84,7 +86,7 @@ def probe(path: str | Path) -> dict:
     if proc.returncode != 0:
         raise FFmpegError(cmd, proc.stderr.decode(errors="replace"))
     info = json.loads(proc.stdout)
-    stream = next((s for s in info.get("streams", []) if "sample_rate" in s), {})
+    stream: dict = next((s for s in info.get("streams", []) if "sample_rate" in s), {})
     fmt = info.get("format", {})
     duration = float(stream.get("duration") or fmt.get("duration") or 0.0)
     try:
@@ -151,7 +153,7 @@ def stream_f32(
 
 _EBUR_I = re.compile(r"I:\s+(-?[\d.]+)\s+LUFS")
 _EBUR_LRA = re.compile(r"LRA:\s+(-?[\d.]+)\s+LU")
-_EBUR_PEAK = re.compile(r"Peak:\s+(-?[\d.]+)\s+dBFS")
+_EBUR_PEAK = re.compile(r"Peak:\s+(-?[\d.]+|-inf|inf|nan)\s+dBFS")
 
 
 def measure_ebur128(path: str | Path, extra_filters: str = "") -> dict:
@@ -170,10 +172,13 @@ def measure_ebur128(path: str | Path, extra_filters: str = "") -> dict:
     )
     if not m_i:
         raise FFmpegError(["ebur128", str(path)], stderr)
+    peak = float(m_tp.group(1)) if m_tp else None
+    if peak is not None and (math.isnan(peak) or peak == math.inf):
+        raise FFmpegError(["ebur128", str(path)], stderr)
     return {
         "I": float(m_i.group(1)),
         "LRA": float(m_lra.group(1)) if m_lra else None,
-        "TP": float(m_tp.group(1)) if m_tp else None,
+        "TP": peak if peak is not None and math.isfinite(peak) else None,
     }
 
 
@@ -203,3 +208,23 @@ def measure_astats(path: str | Path) -> dict:
             except ValueError:
                 pass
     return out
+
+
+@lru_cache(maxsize=16)
+def filter_latency(chain: str, rate: int) -> int:
+    """Measure installed FFmpeg's delay with an isolated impulse, not a guess."""
+    x = np.zeros(rate // 2, dtype=np.float32)
+    position = rate // 8
+    x[position] = 0.5
+    proc = subprocess.run(
+        [FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-f", "f32le", "-ar", str(rate),
+         "-ac", "1", "-i", "-", "-af", chain, "-f", "f32le", "-"],
+        input=x.tobytes(), capture_output=True, check=False,
+    )
+    y = np.frombuffer(proc.stdout, dtype=np.float32)
+    if proc.returncode or not y.size or not np.all(np.isfinite(y)) or np.max(np.abs(y)) < .01:
+        raise FFmpegError(["latency", chain], proc.stderr.decode(errors="replace"))
+    delay = int(np.argmax(np.abs(y))) - position
+    if not 0 <= delay <= rate // 5:
+        raise ValueError("FFmpegフィルタの遅延を安全に校正できません")
+    return delay

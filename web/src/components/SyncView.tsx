@@ -25,6 +25,8 @@ export default function SyncView({ stage }: { stage: StageState }) {
 
   return (
     <div>
+      {report.approval_blocked && <p role="alert" className="warn-list">同期の信頼度が不足しています。素材・設定・手動オフセットを確認して再実行してください。</p>}
+      {report.override_applied && <p role="alert" className="warn-list">低信頼度の同期を明示的に許可しています。</p>}
       <p className="muted" style={{ margin: "8px 0 4px" }}>
         時間 vs ずれ(点 = 区間別推定、×= 除外区間、線 = フィット結果)
       </p>
@@ -68,9 +70,9 @@ export default function SyncView({ stage }: { stage: StageState }) {
                 <td style={{ color: COLORS[sp] }}>{sp}</td>
                 <td>{report.offsets_ms[sp].toFixed(1)} ms</td>
                 <td>{report.drift_ppm[sp].toFixed(1)} ppm</td>
-                <td>{report.drift_corrected[sp] ? "rubberband" : "オフセットのみ"}</td>
-                <td style={{ color: Math.abs(report.residual_ms[sp]) > 1 ? "var(--warn)" : "var(--ok)" }}>
-                  {report.residual_ms[sp].toFixed(2)} ms
+                <td>{report.drift_corrected[sp] ? (report.resample_method ?? "rubberband") : "オフセットのみ"}</td>
+                <td style={{ color: report.residual_ms[sp] == null || Math.abs(report.residual_ms[sp]) > 1 ? "var(--warn)" : "var(--ok)" }}>
+                  {report.residual_ms[sp]?.toFixed(2) ?? "検証不可"} ms
                 </td>
               </tr>
             ))}

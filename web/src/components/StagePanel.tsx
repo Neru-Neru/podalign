@@ -59,11 +59,20 @@ const STATUS_LABELS: Record<string, string> = {
 const PARAM_LABELS: Record<string, string> = {
   drift_threshold_ppm: "ドリフト補正のしきい値 (ppm)",
   n_segments: "解析区間数",
+  anchor_mode: "同期アンカーの選択",
+  fit_method: "同期推定方式",
+  resample_method: "ドリフト補正方式",
+  allow_low_confidence: "低信頼度の同期を明示的に許可する（全区間の試聴が必要）",
+  denoise_mode: "ノイズ除去モード",
+  speech_band_protection: "300〜3400Hzの音声帯域を保護する",
   segment_s: "解析区間の長さ (秒)",
   highpass_hz: "低域カット周波数 (Hz)",
   nr_max_db: "ノイズ除去の最大量 (dB)",
   gate_range_db: "ゲートで下げる音量 (dB)",
   target_lufs: "目標音量 (LUFS)",
+  max_gain_db: "最大増幅量 (dB)",
+  silence_gate_lufs: "増幅しない音量のしきい値 (LUFS)",
+  peak_ceiling_dbtp: "整音後の最大ピーク (dBTP)",
   deess_intensity: "歯擦音（サ行）の抑制強度",
   comp1: "コンプレッサー1",
   comp2: "コンプレッサー2",
@@ -97,6 +106,17 @@ function ParamFields({
       {Object.entries(value).map(([key, v]) => {
         const p = [...path, key];
         const label = p.map(part => PARAM_LABELS[part] ?? part).join(" / ");
+        const choices: Record<string, Record<string, string>> = {
+          denoise_mode: { legacy: "従来の処理", off: "無効", auto: "自動判定", light: "弱", medium: "中" },
+          anchor_mode: { uniform: "等間隔（従来）", vad: "発話区間を優先" },
+          fit_method: { theil_sen: "Theil–Sen（従来）", ransac: "RANSAC" },
+          resample_method: { rubberband: "Rubber Band（従来）", polyphase: "Polyphase（微小な音程変化あり）" },
+        };
+        if (choices[key]) return <label key={key}>{label}
+          <select value={String(v)} onChange={e => onChange(p, e.target.value)}>
+            {Object.entries(choices[key]).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+          </select>
+        </label>;
         if (v !== null && typeof v === "object") {
           return <ParamFields key={key} value={v} path={p} onChange={onChange} />;
         }
@@ -121,6 +141,59 @@ function ParamFields({
       })}
     </>
   );
+}
+
+function CleanupFields({ params, speakers, onChange }: {
+  params: Record<string, any>; speakers: string[];
+  onChange: (path: string[], v: unknown) => void;
+}) {
+  const { track_max_gain_db: overrides = {}, track_denoise_mode: nrOverrides = {}, ...common } = params;
+  return <>
+    <ParamFields value={{ max_gain_db: 12, silence_gate_lufs: -60,
+      peak_ceiling_dbtp: -1, denoise_mode: "legacy", speech_band_protection: true, ...common }} path={[]} onChange={onChange} />
+    {speakers.map(role => <label key={role}>{role} の最大増幅量 (dB)
+      <input type="number" min="0" max="48" step="0.5"
+        value={overrides[role] ?? ""}
+        placeholder={`共通設定: ${params.max_gain_db ?? 12} dB`}
+        onChange={e => {
+          const next = { ...overrides };
+          if (e.target.value === "") delete next[role];
+          else next[role] = Number(e.target.value);
+          onChange(["track_max_gain_db"], next);
+        }} />
+    </label>)}
+    {speakers.map(role => <label key={role + "nr"}>{role} のノイズ除去
+      <select value={nrOverrides[role] ?? ""} onChange={e => {
+        const next = { ...nrOverrides };
+        if (!e.target.value) delete next[role]; else next[role] = e.target.value;
+        onChange(["track_denoise_mode"], next);
+      }}>
+        <option value="">共通設定を使用</option><option value="off">無効</option>
+        <option value="auto">自動判定</option><option value="light">弱</option><option value="medium">中</option>
+        <option value="legacy">従来の処理</option>
+      </select>
+    </label>)}
+    <p className="muted">話者別の欄が空なら共通設定を使用します。安全上限により目標音量に届かない場合があります。</p>
+  </>;
+}
+
+function SyncFields({ params, speakers, onChange }: {
+  params: Record<string, any>; speakers: string[]; onChange: (path: string[], v: unknown) => void;
+}) {
+  const { manual_offsets_ms: offsets = {}, ...common } = params;
+  return <>
+    <ParamFields value={{ anchor_mode: "uniform", fit_method: "theil_sen", resample_method: "rubberband",
+      allow_low_confidence: false, ...common }} path={[]} onChange={onChange} />
+    {speakers.map(role => <label key={role}>{role} の手動オフセット (ms)
+      <input type="number" step="0.01" value={offsets[role] ?? ""} placeholder="自動推定"
+        onChange={e => {
+          const next = { ...offsets };
+          if (e.target.value === "") delete next[role]; else next[role] = Number(e.target.value);
+          onChange(["manual_offsets_ms"], next);
+        }} />
+    </label>)}
+    <p className="muted">手動値は自動オフセットを置き換えます。補正後の検証は省略しません。</p>
+  </>;
 }
 
 function seconds(value: unknown): string {
@@ -249,7 +322,7 @@ function StageReport({ stage, state }: { stage: string; state: StageState }) {
       <div className="report">
         <table>
           <thead><tr>
-            <th>トラック</th><th>ノイズフロア</th><th>ハム</th><th>NR量</th><th>整合ゲイン</th>
+            <th>トラック</th><th>ノイズフロア</th><th>ハム</th><th>NR量</th><th>整合ゲイン</th><th>整音後音量</th><th>整音後ピーク</th><th>NR判定</th>
           </tr></thead>
           <tbody>
             {Object.entries(r.tracks ?? {}).map(([role, t]: [string, any]) => (
@@ -258,7 +331,12 @@ function StageReport({ stage, state }: { stage: string; state: StageState }) {
                 <td>{t.noise_floor_db} dB</td>
                 <td>{t.hum_hz ? `${t.hum_hz}Hz 除去` : "なし"}</td>
                 <td>{t.nr_db} dB</td>
-                <td>{t.align_gain_db > 0 ? "+" : ""}{t.align_gain_db} dB</td>
+                <td>{t.align_gain_db > 0 ? "+" : ""}{t.align_gain_db} dB
+                  {t.gain_limit_reasons?.length > 0 && " (安全制限)"}</td>
+                <td>{t.loudness_after_gain ?? "—"} LUFS</td>
+                <td>{t.true_peak_after_gain ?? "—"} dBTP</td>
+                <td>{t.denoise?.analysis?.snr_db != null ? `推定SNR ${t.denoise.analysis.snr_db.toFixed(1)} dB` : "推定なし"}
+                  {t.denoise?.attempts?.length > 1 && " / 劣化検査で処理を軽減"}</td>
               </tr>
             ))}
           </tbody>
@@ -363,6 +441,12 @@ export default function StagePanel({
                 jingleDuration={Number(project.assets.jingle?.probe?.duration ?? 0)}
                 onChange={setParam} />
             </div>
+          ) : stage === "sync" ? (
+            <div className="params"><SyncFields params={params} speakers={speakerRoles(project)} onChange={setParam} /></div>
+          ) : stage === "cleanup" ? (
+            <div className="params">
+              <CleanupFields params={params} speakers={speakerRoles(project)} onChange={setParam} />
+            </div>
           ) : Object.keys(params).length > 0 && (
             <div className="params">
               <ParamFields value={params} path={[]} onChange={setParam} />
@@ -374,7 +458,7 @@ export default function StagePanel({
                 ? "再実行" : "実行"}
             </button>
             {status === "done" && (
-              <button onClick={approve} style={{ background: "var(--ok)" }}>
+              <button onClick={approve} disabled={Boolean(state.report?.approval_blocked)} style={{ background: "var(--ok)" }}>
                 承認して次へ
               </button>
             )}

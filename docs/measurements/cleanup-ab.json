@@ -1,0 +1,541 @@
+{
+  "baseline_commit": "4551fe76c243bc0260713ce1d0f5185d75c90d17",
+  "ffmpeg": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "sample_rate": 48000,
+  "seed": 17,
+  "params": {
+    "highpass_hz": 80,
+    "nr_max_db": 12,
+    "denoise_mode": "legacy",
+    "track_denoise_mode": {},
+    "speech_band_protection": true,
+    "gate_range_db": -12,
+    "target_lufs": -20,
+    "max_gain_db": 12.0,
+    "track_max_gain_db": {},
+    "silence_gate_lufs": -60.0,
+    "peak_ceiling_dbtp": -1.0,
+    "deess_intensity": 0.3
+  },
+  "scenes": {
+    "clean": {
+      "loudness": {
+        "A": {
+          "I": -20.0,
+          "LRA": 1.7,
+          "TP": -3.3
+        },
+        "B": {
+          "I": -20.0,
+          "LRA": 1.7,
+          "TP": -2.8
+        }
+      },
+      "gain_A_db": 1.6999999999999993,
+      "safe_report": {
+        "noise_floor_db": -44.3,
+        "hum_hz": null,
+        "declip_applied": false,
+        "nr_db": 12.0,
+        "denoise": {
+          "requested_mode": "legacy",
+          "nr_db": 12.0,
+          "speech_band_protected": false,
+          "analysis": {
+            "noise_floor_db": -200.0,
+            "snr_db": 179.40907971805376,
+            "reliable": true,
+            "speech_fraction": 0.5833333333333334,
+            "nonstationary": true,
+            "variation": 5.223354733137496,
+            "transient_fraction": 0.04
+          },
+          "noise_profile_db": -44.341913960742815,
+          "latency_compensated": true,
+          "quality": {
+            "valid": true,
+            "speech_band_loss_db": 4.272294958859186e-07,
+            "snr_improvement_db": -0.018354374355914378,
+            "suspected": false
+          },
+          "attempts": [
+            {
+              "nr_db": 12.0,
+              "quality": {
+                "valid": true,
+                "speech_band_loss_db": 4.272294958859186e-07,
+                "snr_improvement_db": -0.018354374355914378,
+                "suspected": false
+              }
+            }
+          ],
+          "warnings": []
+        },
+        "loudness_before_gain": -22.2,
+        "true_peak_before_gain": -5.0,
+        "loudness_after_gain": -20.0,
+        "true_peak_after_gain": -2.8,
+        "requested_gain_db": 2.1999999999999993,
+        "gain_limit_reasons": [],
+        "gain_policy": {
+          "target_lufs": -20.0,
+          "max_gain_db": 12.0,
+          "silence_gate_lufs": -60.0,
+          "peak_ceiling_dbtp": -1.0
+        },
+        "align_gain_db": 2.2,
+        "applied_gain_db": 2.2,
+        "filter_chain": "highpass=f=80.000:p=2,afftdn=nr=12.0:nf=-44.3:tn=1,deesser=i=0.3:m=0.5:f=0.5,agate=threshold=-38.3dB:range=-12.0dB:attack=10:release=250",
+        "nr_latency_compensated": true
+      },
+      "metrics": {
+        "A": {
+          "si_sdr_db": -2.3618184343052695,
+          "speech_band_change_db": 1.6877176718234228,
+          "sample_peak": 0.6807520389556885,
+          "rail_samples": 0,
+          "samples": 288000
+        },
+        "B": {
+          "si_sdr_db": -1.9301747530096351,
+          "speech_band_change_db": 2.191447970954738,
+          "sample_peak": 0.7210890054702759,
+          "rail_samples": 0,
+          "samples": 288000
+        }
+      }
+    },
+    "quiet": {
+      "loudness": {
+        "A": {
+          "I": -21.1,
+          "LRA": 1.7,
+          "TP": -5.2
+        },
+        "B": {
+          "I": -66.7,
+          "LRA": 0.2,
+          "TP": -52.3
+        }
+      },
+      "gain_A_db": 47.099999999999994,
+      "safe_report": {
+        "noise_floor_db": -90.0,
+        "hum_hz": null,
+        "declip_applied": false,
+        "nr_db": 12.0,
+        "denoise": {
+          "requested_mode": "legacy",
+          "nr_db": 12.0,
+          "speech_band_protected": false,
+          "analysis": {
+            "noise_floor_db": -200.0,
+            "snr_db": 135.1216190025262,
+            "reliable": true,
+            "speech_fraction": 0.38666666666666666,
+            "nonstationary": true,
+            "variation": 2.6181969277118404,
+            "transient_fraction": 0.34782608695652173
+          },
+          "noise_profile_db": -90.0,
+          "latency_compensated": true,
+          "quality": {
+            "valid": true,
+            "speech_band_loss_db": 1.302198797625969,
+            "snr_improvement_db": 1.3710915407800663,
+            "suspected": false
+          },
+          "attempts": [
+            {
+              "nr_db": 12.0,
+              "quality": {
+                "valid": true,
+                "speech_band_loss_db": 1.302198797625969,
+                "snr_improvement_db": 1.3710915407800663,
+                "suspected": false
+              }
+            }
+          ],
+          "warnings": []
+        },
+        "loudness_before_gain": -66.7,
+        "true_peak_before_gain": -52.3,
+        "loudness_after_gain": -66.7,
+        "true_peak_after_gain": -52.3,
+        "requested_gain_db": null,
+        "gain_limit_reasons": [
+          "below_silence_gate"
+        ],
+        "gain_policy": {
+          "target_lufs": -20.0,
+          "max_gain_db": 12.0,
+          "silence_gate_lufs": -60.0,
+          "peak_ceiling_dbtp": -1.0
+        },
+        "align_gain_db": 0.0,
+        "applied_gain_db": 0.0,
+        "filter_chain": "highpass=f=80.000:p=2,afftdn=nr=12.0:nf=-80.0:tn=1,deesser=i=0.3:m=0.5:f=0.5,agate=threshold=-74.0dB:range=-12.0dB:attack=10:release=250",
+        "nr_latency_compensated": true
+      },
+      "metrics": {
+        "A": {
+          "si_sdr_db": -1.8301786571245546,
+          "speech_band_change_db": 45.76722744770193,
+          "sample_peak": 0.5452245473861694,
+          "rail_samples": 0,
+          "samples": 288000
+        },
+        "B": {
+          "si_sdr_db": -2.3818473548325185,
+          "speech_band_change_db": -1.3335564737054515,
+          "sample_peak": 0.002407550811767578,
+          "rail_samples": 0,
+          "samples": 288000
+        }
+      }
+    },
+    "stationary_10db": {
+      "loudness": {
+        "A": {
+          "I": -20.0,
+          "LRA": 1.1,
+          "TP": -2.2
+        },
+        "B": {
+          "I": -20.0,
+          "LRA": 1.1,
+          "TP": -2.2
+        }
+      },
+      "gain_A_db": 2.0,
+      "safe_report": {
+        "noise_floor_db": -36.5,
+        "hum_hz": null,
+        "declip_applied": false,
+        "nr_db": 12.0,
+        "denoise": {
+          "requested_mode": "legacy",
+          "nr_db": 12.0,
+          "speech_band_protected": false,
+          "analysis": {
+            "noise_floor_db": -37.3084199363776,
+            "snr_db": 18.255034967142194,
+            "reliable": true,
+            "speech_fraction": 0.41333333333333333,
+            "nonstationary": false,
+            "variation": 0.6478641167276158,
+            "transient_fraction": 0.0
+          },
+          "noise_profile_db": -36.46355389720107,
+          "latency_compensated": true,
+          "quality": {
+            "valid": true,
+            "speech_band_loss_db": 0.016945699672469,
+            "snr_improvement_db": 0.330435083755298,
+            "suspected": false
+          },
+          "attempts": [
+            {
+              "nr_db": 12.0,
+              "quality": {
+                "valid": true,
+                "speech_band_loss_db": 0.016945699672469,
+                "snr_improvement_db": 0.330435083755298,
+                "suspected": false
+              }
+            }
+          ],
+          "warnings": []
+        },
+        "loudness_before_gain": -22.0,
+        "true_peak_before_gain": -4.2,
+        "loudness_after_gain": -20.0,
+        "true_peak_after_gain": -2.2,
+        "requested_gain_db": 2.0,
+        "gain_limit_reasons": [],
+        "gain_policy": {
+          "target_lufs": -20.0,
+          "max_gain_db": 12.0,
+          "silence_gate_lufs": -60.0,
+          "peak_ceiling_dbtp": -1.0
+        },
+        "align_gain_db": 2.0,
+        "applied_gain_db": 2.0,
+        "filter_chain": "highpass=f=80.000:p=2,afftdn=nr=12.0:nf=-36.5:tn=1,deesser=i=0.3:m=0.5:f=0.5,agate=threshold=-30.5dB:range=-12.0dB:attack=10:release=250",
+        "nr_latency_compensated": true
+      },
+      "metrics": {
+        "A": {
+          "si_sdr_db": -3.6219849567770144,
+          "speech_band_change_db": 1.8347440802805217,
+          "sample_peak": 0.776244044303894,
+          "rail_samples": 0,
+          "samples": 288000
+        },
+        "B": {
+          "si_sdr_db": -1.1015982407732985,
+          "speech_band_change_db": 1.8380520339686648,
+          "sample_peak": 0.776244044303894,
+          "rail_samples": 0,
+          "samples": 288000
+        }
+      }
+    },
+    "stationary_30db": {
+      "loudness": {
+        "A": {
+          "I": -20.0,
+          "LRA": 1.7,
+          "TP": -3.1
+        },
+        "B": {
+          "I": -20.0,
+          "LRA": 1.7,
+          "TP": -2.8
+        }
+      },
+      "gain_A_db": 1.8999999999999986,
+      "safe_report": {
+        "noise_floor_db": -44.1,
+        "hum_hz": null,
+        "declip_applied": false,
+        "nr_db": 12.0,
+        "denoise": {
+          "requested_mode": "legacy",
+          "nr_db": 12.0,
+          "speech_band_protected": false,
+          "analysis": {
+            "noise_floor_db": -57.51596315343502,
+            "snr_db": 37.36894710279613,
+            "reliable": true,
+            "speech_fraction": 0.5266666666666666,
+            "nonstationary": false,
+            "variation": 0.7705060784769105,
+            "transient_fraction": 0.0
+          },
+          "noise_profile_db": -44.09602676298001,
+          "latency_compensated": true,
+          "quality": {
+            "valid": true,
+            "speech_band_loss_db": 0.000729372427623957,
+            "snr_improvement_db": 2.7255724497962444,
+            "suspected": false
+          },
+          "attempts": [
+            {
+              "nr_db": 12.0,
+              "quality": {
+                "valid": true,
+                "speech_band_loss_db": 0.000729372427623957,
+                "snr_improvement_db": 2.7255724497962444,
+                "suspected": false
+              }
+            }
+          ],
+          "warnings": []
+        },
+        "loudness_before_gain": -22.2,
+        "true_peak_before_gain": -5.0,
+        "loudness_after_gain": -20.0,
+        "true_peak_after_gain": -2.8,
+        "requested_gain_db": 2.1999999999999993,
+        "gain_limit_reasons": [],
+        "gain_policy": {
+          "target_lufs": -20.0,
+          "max_gain_db": 12.0,
+          "silence_gate_lufs": -60.0,
+          "peak_ceiling_dbtp": -1.0
+        },
+        "align_gain_db": 2.2,
+        "applied_gain_db": 2.2,
+        "filter_chain": "highpass=f=80.000:p=2,afftdn=nr=12.0:nf=-44.1:tn=1,deesser=i=0.3:m=0.5:f=0.5,agate=threshold=-38.1dB:range=-12.0dB:attack=10:release=250",
+        "nr_latency_compensated": true
+      },
+      "metrics": {
+        "A": {
+          "si_sdr_db": -2.369059048823792,
+          "speech_band_change_db": 1.88751494995685,
+          "sample_peak": 0.7006770372390747,
+          "rail_samples": 0,
+          "samples": 288000
+        },
+        "B": {
+          "si_sdr_db": -1.9241229199886332,
+          "speech_band_change_db": 2.190604877912747,
+          "sample_peak": 0.7253005504608154,
+          "rail_samples": 0,
+          "samples": 288000
+        }
+      }
+    },
+    "transient": {
+      "loudness": {
+        "A": {
+          "I": -30.5,
+          "LRA": 4.9,
+          "TP": 2.1
+        },
+        "B": {
+          "I": -41.2,
+          "LRA": 14.4,
+          "TP": -1.1
+        }
+      },
+      "gain_A_db": 19.700000000000003,
+      "safe_report": {
+        "noise_floor_db": -74.8,
+        "hum_hz": null,
+        "declip_applied": false,
+        "nr_db": 12.0,
+        "denoise": {
+          "requested_mode": "legacy",
+          "nr_db": 12.0,
+          "speech_band_protected": false,
+          "analysis": {
+            "noise_floor_db": -200.0,
+            "snr_db": 157.79474195363036,
+            "reliable": true,
+            "speech_fraction": 0.5233333333333333,
+            "nonstationary": true,
+            "variation": 3.6584041095246342,
+            "transient_fraction": 0.1888111888111888
+          },
+          "noise_profile_db": -74.79934197141239,
+          "latency_compensated": true,
+          "quality": {
+            "valid": true,
+            "speech_band_loss_db": 0.0022119233093748775,
+            "snr_improvement_db": 0.31205766838661775,
+            "suspected": false
+          },
+          "attempts": [
+            {
+              "nr_db": 12.0,
+              "quality": {
+                "valid": true,
+                "speech_band_loss_db": 0.0022119233093748775,
+                "snr_improvement_db": 0.31205766838661775,
+                "suspected": false
+              }
+            }
+          ],
+          "warnings": []
+        },
+        "loudness_before_gain": -39.7,
+        "true_peak_before_gain": 0.4,
+        "loudness_after_gain": -41.2,
+        "true_peak_after_gain": -1.1,
+        "requested_gain_db": 19.700000000000003,
+        "gain_limit_reasons": [
+          "max_gain",
+          "peak_headroom"
+        ],
+        "gain_policy": {
+          "target_lufs": -20.0,
+          "max_gain_db": 12.0,
+          "silence_gate_lufs": -60.0,
+          "peak_ceiling_dbtp": -1.0
+        },
+        "align_gain_db": -1.5,
+        "applied_gain_db": -1.5,
+        "filter_chain": "highpass=f=80.000:p=2,afftdn=nr=12.0:nf=-74.8:tn=1,deesser=i=0.3:m=0.5:f=0.5,agate=threshold=-68.8dB:range=-12.0dB:attack=10:release=250",
+        "nr_latency_compensated": true
+      },
+      "metrics": {
+        "A": {
+          "si_sdr_db": -2.3496806828242933,
+          "speech_band_change_db": 19.68789888518198,
+          "sample_peak": 1.0,
+          "rail_samples": 41,
+          "samples": 288000
+        },
+        "B": {
+          "si_sdr_db": -1.9419271687054147,
+          "speech_band_change_db": -1.5085398605753466,
+          "sample_peak": 0.7790967226028442,
+          "rail_samples": 0,
+          "samples": 288000
+        }
+      }
+    },
+    "silence": {
+      "loudness": {
+        "A": {
+          "I": -70.0,
+          "LRA": 0.0,
+          "TP": null
+        },
+        "B": {
+          "I": -70.0,
+          "LRA": 0.0,
+          "TP": null
+        }
+      },
+      "gain_A_db": 50.0,
+      "safe_report": {
+        "noise_floor_db": -90.0,
+        "hum_hz": null,
+        "declip_applied": false,
+        "nr_db": 12.0,
+        "denoise": {
+          "requested_mode": "legacy",
+          "nr_db": 12.0,
+          "speech_band_protected": false,
+          "analysis": {
+            "noise_floor_db": -200.0,
+            "snr_db": null,
+            "reliable": false,
+            "speech_fraction": 0.0,
+            "nonstationary": false,
+            "variation": 0.0,
+            "transient_fraction": 0.0
+          },
+          "noise_profile_db": -90.0,
+          "latency_compensated": true,
+          "quality": {
+            "valid": false,
+            "suspected": false,
+            "reason": "発話区間の根拠不足"
+          },
+          "attempts": [
+            {
+              "nr_db": 12.0,
+              "quality": {
+                "valid": false,
+                "suspected": false,
+                "reason": "発話区間の根拠不足"
+              }
+            }
+          ],
+          "warnings": []
+        },
+        "loudness_before_gain": -70.0,
+        "true_peak_before_gain": null,
+        "loudness_after_gain": -70.0,
+        "true_peak_after_gain": null,
+        "requested_gain_db": null,
+        "gain_limit_reasons": [
+          "below_silence_gate"
+        ],
+        "gain_policy": {
+          "target_lufs": -20.0,
+          "max_gain_db": 12.0,
+          "silence_gate_lufs": -60.0,
+          "peak_ceiling_dbtp": -1.0
+        },
+        "align_gain_db": 0.0,
+        "applied_gain_db": 0.0,
+        "filter_chain": "highpass=f=80.000:p=2,afftdn=nr=12.0:nf=-80.0:tn=1,deesser=i=0.3:m=0.5:f=0.5,agate=threshold=-74.0dB:range=-12.0dB:attack=10:release=250",
+        "nr_latency_compensated": true
+      },
+      "metrics": {
+        "A": {
+          "nonzero_samples": 0
+        },
+        "B": {
+          "nonzero_samples": 0
+        }
+      }
+    }
+  }
+}

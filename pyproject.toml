@@ -14,8 +14,21 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "httpx>=0.27",
+    "ruff>=0.17.6",
+    "mypy>=2.4.1",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: 実素材級の長時間テスト"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+ignore_missing_imports = true

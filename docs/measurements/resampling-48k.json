@@ -1,0 +1,102 @@
+{
+  "verification_rate": 8000,
+  "rows": [
+    {
+      "ppm": -100,
+      "method": "rubberband",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 1.618212799000048,
+      "rss_kib_sampled": 37160,
+      "output_samples": 5760000,
+      "residual_offset_ms": -0.02236873822469046,
+      "residual_ppm": -0.0019514572882601818,
+      "max_segment_ms": 0.0243
+    },
+    {
+      "ppm": -100,
+      "method": "polyphase",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 0.1605105689998254,
+      "rss_kib_sampled": 35160,
+      "output_samples": 5760000,
+      "residual_offset_ms": -0.0042254688272786375,
+      "residual_ppm": 0.00041733999293178705,
+      "max_segment_ms": 0.0056
+    },
+    {
+      "ppm": -12,
+      "method": "rubberband",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 1.433856619999915,
+      "rss_kib_sampled": 37092,
+      "output_samples": 5760000,
+      "residual_offset_ms": -0.009473920439830549,
+      "residual_ppm": -0.016433336703716994,
+      "max_segment_ms": 0.0121
+    },
+    {
+      "ppm": -12,
+      "method": "polyphase",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 0.14067449900016982,
+      "rss_kib_sampled": 35252,
+      "output_samples": 5760000,
+      "residual_offset_ms": 0.0036411434412191774,
+      "residual_ppm": -0.008482891815712967,
+      "max_segment_ms": 0.0052
+    },
+    {
+      "ppm": 12,
+      "method": "rubberband",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 1.1281930489999468,
+      "rss_kib_sampled": 37632,
+      "output_samples": 5760000,
+      "residual_offset_ms": 0.009506368255307856,
+      "residual_ppm": 0.020564469630842304,
+      "max_segment_ms": 0.0136
+    },
+    {
+      "ppm": 12,
+      "method": "polyphase",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 0.1702152450000085,
+      "rss_kib_sampled": 35208,
+      "output_samples": 5760000,
+      "residual_offset_ms": -0.0035410004272141155,
+      "residual_ppm": 0.007836700232912696,
+      "max_segment_ms": 0.0051
+    },
+    {
+      "ppm": 100,
+      "method": "rubberband",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 1.237357770000017,
+      "rss_kib_sampled": 37164,
+      "output_samples": 5760000,
+      "residual_offset_ms": 0.02322225865848242,
+      "residual_ppm": 0.006447028661482243,
+      "max_segment_ms": 0.0246
+    },
+    {
+      "ppm": 100,
+      "method": "polyphase",
+      "sample_rate": 48000,
+      "duration_seconds": 120,
+      "seconds": 0.15039127399995778,
+      "rss_kib_sampled": 35560,
+      "output_samples": 5760000,
+      "residual_offset_ms": 0.0044846362426047975,
+      "residual_ppm": -0.0005040629981060675,
+      "max_segment_ms": 0.0047
+    }
+  ],
+  "note": "ピークRSSは5ms間隔のサンプリング値。実行時間は環境依存。"
+}

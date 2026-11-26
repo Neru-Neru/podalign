@@ -65,3 +65,16 @@ def test_export_keeps_completed_files_on_failure(data_dir, monkeypatch):
     with pytest.raises(RuntimeError, match="export failed"):
         runner._execute(pid, "export", regenerate=False)
     assert completed.read_bytes() == b"completed"
+
+
+def test_cleanup_reserves_space_for_float_intermediates(data_dir, monkeypatch):
+    doc = prj.create_project('容量確認')
+    doc['assets'] = {r: {'bytes': 1000000, 'probe': {'duration': 3600}} for r in prj.SPEAKERS}
+    monkeypatch.setattr(storage, 'disk_free_bytes', lambda: 2 << 30)
+    with pytest.raises(runner.NotRunnable, match='空き'):
+        runner._check_disk(doc, 'cleanup')
+    monkeypatch.setattr(storage, 'disk_free_bytes', lambda: 8 << 30)
+    runner._check_disk(doc, 'cleanup')
+    # Starting Ingest does not require Cleanup's future temporary files.
+    monkeypatch.setattr(storage, 'disk_free_bytes', lambda: 2 << 30)
+    runner._check_disk(doc, 'ingest')

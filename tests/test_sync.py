@@ -11,7 +11,6 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from app.pipeline import analysis
 from app.pipeline.s1_sync import correction_filters
@@ -52,8 +51,8 @@ def make_pair(
     mute=(t0,t1) の間は本人が喋っていない(speaker はほぼ無音、ref は他話者のみ)
     """
     s = drift_ppm * 1e-6
-    own = speechlike(seed)
-    others = speechlike(seed + 100) + speechlike(seed + 200)
+    own = speechlike(seed, dur=dur)
+    others = speechlike(seed + 100, dur=dur) + speechlike(seed + 200, dur=dur)
     if mute:
         i0, i1 = int(mute[0] * SR), int(mute[1] * SR)
         own[i0:i1] = 0.0

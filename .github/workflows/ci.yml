@@ -18,12 +18,11 @@ jobs:
         run: ffmpeg -filters | grep -q rubberband
       - uses: astral-sh/setup-uv@v4
       - run: uv sync
-      # PR は高速テストのみ、main / タグは E2E 込みの全テスト
-      - name: Fast tests
-        if: github.event_name == 'pull_request'
-        run: uv run pytest -q --ignore=tests/test_pipeline_e2e.py
-      - name: Full tests (incl. E2E)
-        if: github.event_name != 'pull_request'
+      - name: Lint
+        run: uv run ruff check app tests benchmarks
+      - name: Python type check
+        run: uv run mypy app tests/audio_fixtures.py benchmarks
+      - name: Full tests (incl. E2E on pull requests)
         run: uv run pytest -q
 
   web-build:
@@ -39,6 +38,13 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
+      - name: Install browser for GUI regression tests
+        uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - run: npm run test:trim
+        working-directory: web
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
 
   docker:
     # main への push とリリースタグのみ: GHCR へ build & push(§1-2)

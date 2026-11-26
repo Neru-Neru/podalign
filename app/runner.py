@@ -65,7 +65,7 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
                     raise NotRunnable(
                         f"上流ステージ {upstream} が未承認です (現在: {statuses[upstream]})"
                     )
-            _check_disk(doc)
+            _check_disk(doc, stage)
             st = doc["stages"][stage]
             if params:
                 if stage == "trim":
@@ -77,6 +77,13 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
                             candidate,
                             doc["stages"]["sync"]["report"].get("program_length_samples", 0),
                         )
+                    except ValueError as exc:
+                        raise NotRunnable(str(exc)) from exc
+                    st["params"] = candidate
+                elif stage == "sync":
+                    candidate = {**st["params"], **params}
+                    try:
+                        s1_sync.validate_params(candidate, prj.speaker_roles(doc))
                     except ValueError as exc:
                         raise NotRunnable(str(exc)) from exc
                     st["params"] = candidate
@@ -116,10 +123,23 @@ def start(project_id: str, stage: str, params: dict | None) -> None:
         raise
 
 
-def _check_disk(doc: dict) -> None:
+def _check_disk(doc: dict, stage: str | None = None) -> None:
     """実行前に必要容量を見積もりチェック(§11)。不足時は GC を促す。"""
     asset_bytes = sum(a.get("bytes", 0) for a in doc["assets"].values())
     need = max(1 << 30, int(asset_bytes * 1.5))
+    order = doc.get("stage_order", [])
+    if stage in order and "cleanup" in order and order.index(stage) >= order.index("cleanup"):
+        cleanup = storage.stage_dir(doc["id"], "cleanup")
+        regenerating = any(not (cleanup / f"{r}.flac").exists() for r in prj.speaker_roles(doc))
+        if stage == "cleanup" or regenerating:
+            tracks = doc.get("stages", {}).get("ingest", {}).get("report", {}).get("tracks", {})
+            durations = [float(tracks.get(r, {}).get("duration_s", doc["assets"][r].get("probe", {}).get("duration", 0)))
+                         for r in prj.speaker_roles(doc)]
+            # Two float files per active track, two parallel tracks, all FLAC
+            # outputs at worst-case PCM size, plus 1GiB for previews/meters.
+            floats = sum(sorted(durations, reverse=True)[:2]) * 48000 * 4 * 2
+            outputs = sum(durations) * 48000 * 3
+            need = max(need, int(floats + outputs) + (1 << 30))
     free = storage.disk_free_bytes()
     if free < need:
         raise NotRunnable(
@@ -203,6 +223,8 @@ def approve(project_id: str, stage: str) -> None:
         status = prj.effective_status(doc)[stage]
         if status != "done":
             raise NotRunnable(f"承認できるのは done のステージのみです (現在: {status})")
+        if doc["stages"][stage].get("report", {}).get("approval_blocked"):
+            raise NotRunnable("同期の信頼度が低いため承認できません。設定・素材を確認して再実行してください")
         doc["stages"][stage]["status"] = "approved"
     # エピソード完了(export 承認)で直近2ステージ以外を自動 purge(§6.2)
     if stage == "export":

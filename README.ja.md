@@ -181,3 +181,5 @@ podalign をネットワークサービスとして第三者に提供する場�
 
 Docker イメージには **librubberband(GPL)入り ffmpeg** を同梱しているため、
 その表記とソース入手方法を [NOTICE](NOTICE) に記載しています。
+
+Cleanupのゲイン安全策と再現可能なA/B比較: [docs/audio-safety.md](docs/audio-safety.md).

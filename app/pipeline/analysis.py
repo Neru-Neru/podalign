@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 
 from . import ffmpeg
+from .robust import fit_clock
+from .voice import analyze_voice
 
 ANALYSIS_SR = 8000       # 微調整用ダウンサンプル周波数(±0.125ms 分解能 + 放物線補間)
 ENV_HOP_S = 0.02         # エンベロープ 20ms ホップ = 50Hz
@@ -104,6 +106,7 @@ class SyncEstimate:
     segments: list[dict] = field(default_factory=list)   # UI グラフ用
     used_segments: int = 0
     warnings: list[str] = field(default_factory=list)
+    quality: dict = field(default_factory=dict)
 
 
 def estimate_sync(
@@ -113,6 +116,8 @@ def estimate_sync(
     n_segments: int = 10,
     segment_s: float = 30.0,
     fine_window_s: float = 0.1,
+    anchor_mode: str = "uniform",
+    fit_method: str = "theil_sen",
 ) -> SyncEstimate:
     """話者トラックの reference に対するオフセット+ドリフトを推定する。
 
@@ -123,7 +128,10 @@ def estimate_sync(
        最小二乗でフィット。傾き=ドリフト率、切片=初期オフセット
     """
     warnings: list[str] = []
-    hop = int(sr * ENV_HOP_S)
+    if anchor_mode not in ("uniform", "vad") or not 3 <= n_segments <= 64:
+        raise ValueError("同期アンカー設定が不正です")
+    if not np.isfinite(segment_s) or segment_s < 1 or not np.all(np.isfinite(spk)) or not np.all(np.isfinite(ref)):
+        raise ValueError("同期解析の素材または区間長が不正です")
 
     # --- 1. 粗探索(エンベロープ、素の相互相関 — cross_correlate の docstring 参照) ---
     env_s, env_r = envelope_db(spk, sr), envelope_db(ref, sr)
@@ -145,6 +153,27 @@ def estimate_sync(
     seg_starts = np.linspace(
         overlap_start, overlap_end - segment_s, n_segments
     )
+    if anchor_mode == "vad":
+        voice = analyze_voice(spk, sr)
+        # Retain the original long correlation windows, moving each only within
+        # its zone to maximize speech evidence. No whole-track loudness ranking.
+        zones = np.linspace(overlap_start, overlap_end, n_segments + 1)
+        chosen = []
+        for low, high in zip(zones[:-1], zones[1:]):
+            low = min(low, overlap_end - segment_s)
+            candidates = np.linspace(low, max(low, min(high - segment_s, overlap_end - segment_s)), 12)
+            scores = []
+            for point in candidates:
+                a = max(0, int((point + coarse_s) * sr / voice.hop))
+                b = min(len(voice.speech), a + round(segment_s * sr / voice.hop))
+                scores.append(float(voice.speech[a:b].sum()))
+            if max(scores, default=0) > 0:
+                chosen.append(float(candidates[int(np.argmax(scores))]))
+        if len(chosen) < 3:
+            raise ValueError("VADで十分に分散した発話アンカーが見つかりません")
+        seg_starts = np.unique(np.array(chosen))
+        if len(seg_starts) < 3:
+            raise ValueError("独立したVADアンカーが3未満です")
     # 探索窓: 粗オフセット誤差(±20ms)に加え、ドリフト累積(最大150ppm級)で
     # 区間別オフセットが粗推定から最大±数百ms 逸れうる分を確保する
     margin = max(fine_window_s, 250e-6 * overlap_end)
@@ -195,23 +224,27 @@ def estimate_sync(
     if (~keep).any():
         warnings.append(f"{int((~keep).sum())} 区間を低信頼として除外")
 
-    # 初期フィットは Theil–Sen(ペアワイズ傾きの中央値)— 残存外れ値に強い
-    idx = np.where(keep)[0]
-    pair_slopes = [
-        (l_arr[j] - l_arr[i]) / (t_arr[j] - t_arr[i])
-        for k, i in enumerate(idx) for j in idx[k + 1 :]
-    ]
-    slope = float(np.median(pair_slopes))
-    intercept = float(np.median(l_arr[keep] - slope * t_arr[keep]))
-
-    for _ in range(3):  # 残差ベースの外れ値除去 → 重み付き最小二乗で磨く
-        resid = l_arr - (slope * t_arr + intercept)
-        mad = np.median(np.abs(resid[keep])) + 1e-9
-        new_keep = keep & (np.abs(resid) < max(5 * 1.4826 * mad, 0.5e-3))
-        if new_keep.sum() >= 3:
-            keep = new_keep
-        coef = np.polyfit(t_arr[keep], l_arr[keep], 1, w=np.sqrt(w_arr[keep]))
-        slope, intercept = float(coef[0]), float(coef[1])
+    slope, intercept, keep = fit_clock(t_arr, l_arr, w_arr, keep, fit_method)
+    resid = l_arr - (slope * t_arr + intercept)
+    coverage = float(np.ptp(t_arr[keep]) / max(usable - segment_s, 1e-9))
+    support = float(keep.sum() / len(keep))
+    residual_ms = float(np.max(np.abs(resid[keep])) * 1000)
+    reasons = []
+    corroborated = int(keep.sum()) >= 5 and support >= .8 and coverage >= .6 and residual_ms <= .5
+    if coarse_conf < 5 and not corroborated:
+        reasons.append("粗探索が弱く独立アンカーの裏付けも不足")
+    if coverage < 0.4:
+        reasons.append("アンカーの時間的な広がりが不足")
+    if support < 0.5:
+        reasons.append("アンカーの合意率が不足")
+    if residual_ms > 1:
+        reasons.append("線形クロックモデルの残差が1ms超")
+    contradictions = float(np.mean((np.abs(resid) > .005) & (w_arr >= 8)))
+    if contradictions >= .25:
+        reasons.append("線形モデルに一致しない高信頼区間が多い")
+    quality = {"contradiction_fraction": contradictions, "safe": not reasons, "reasons": reasons, "coverage": coverage,
+               "inlier_fraction": support, "fit_residual_ms": residual_ms,
+               "coarse_confidence": coarse_conf, "anchor_mode": anchor_mode, "fit_method": fit_method}
     for seg, k in zip(segments, keep):
         seg["used"] = bool(k)
     return SyncEstimate(
@@ -220,6 +253,7 @@ def estimate_sync(
         segments=segments,
         used_segments=int(keep.sum()),
         warnings=warnings,
+        quality=quality,
     )
 
 
@@ -253,7 +287,7 @@ def detect_hum(x: np.ndarray, sr: int) -> int | None:
     for f0 in (50, 60):
         hum = band_power(f0, 1.0)
         neighbor = max(band_power(f0 - 8, 3.0), band_power(f0 + 8, 3.0), 1e-18)
-        ratio_db = 10 * np.log10(hum / neighbor)
+        ratio_db = 10 * np.log10(max(hum, 1e-18) / neighbor)
         if ratio_db > 10 and (best is None or ratio_db > best[1]):
             best = (f0, ratio_db)
     return best[0] if best else None
@@ -288,5 +322,5 @@ def compute_peaks(path: str | Path, n_points: int = 2400) -> list[float]:
             )
         carry = buf[n_full * per_bin :]
     if len(carry):
-        peaks.append(float(carry.max()))
+        peaks.append(float(np.max(carry)))
     return [round(p, 4) for p in peaks]
