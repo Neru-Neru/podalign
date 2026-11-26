@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import analysis, ffmpeg
 from .base import PREVIEW_BITRATE_CLEANUP, StageContext
+from .gain import GainPolicy, choose_gain
 
 
 def build_chain(
@@ -40,6 +41,7 @@ def build_chain(
 
 
 def _process(ctx: StageContext, role: str, params: dict) -> dict:
+    policy = GainPolicy.from_params(params, role)
     # 新規プロジェクトは Trim 後、旧 project.json は Sync 直後を読む。
     input_stage = "trim" if "trim" in ctx.doc["stage_order"] else "sync"
     src = ctx.upstream_dir(input_stage) / f"{role}.flac"
@@ -55,28 +57,25 @@ def _process(ctx: StageContext, role: str, params: dict) -> dict:
     )
     chain = build_chain(params, noise_floor, hum, needs_declip)
 
-    # パスB: チェーン適用 + 同時に ebur128 測定(asplit で null 側に分岐)
+    # Keep the pre-gain signal in floating point: FLAC would clip peaks before
+    # we can measure them and choose a safe linear gain.
     ctx.progress(f"cleanup 適用: {role}")
-    tmp = ctx.out_dir / f"_{role}_pregain.flac"
-    stderr = ffmpeg.run([
-        "-i", str(src),
-        "-filter_complex",
-        f"[0:a]{chain},asplit[keep][meter];[meter]ebur128=peak=none[m]",
-        "-map", "[keep]", *ffmpeg.FLAC24, str(tmp),
-        "-map", "[m]", "-f", "null", "-",
+    tmp = ctx.out_dir / f"_{role}_pregain.wav"
+    ffmpeg.run([
+        "-i", str(src), "-af", chain, "-c:a", "pcm_f32le", "-rf64", "auto", str(tmp),
     ])
-    summary = stderr[stderr.rfind("Summary:"):]
-    m = ffmpeg._EBUR_I.search(summary)
-    if not m:
-        raise ffmpeg.FFmpegError(["ebur128", role], stderr)
-    measured_i = float(m.group(1))
-
-    # パスC: 純線形ゲインで target LUFS へ(loudnorm は使わない — R-5)
-    gain_db = float(params["target_lufs"]) - measured_i
+    measured = ffmpeg.measure_ebur128(tmp)
+    decision = choose_gain(measured["I"], measured["TP"], policy)
+    gain_db = decision.applied_gain_db
     ctx.progress(f"cleanup ゲイン整合: {role} ({gain_db:+.1f}dB)")
-    ffmpeg.run(["-i", str(tmp), "-af", f"volume={gain_db:.2f}dB",
+    ffmpeg.run(["-i", str(tmp), "-af", f"volume={gain_db:.6f}dB",
                 *ffmpeg.FLAC24, str(out)])
     tmp.unlink()
+    final = ffmpeg.measure_ebur128(out)
+    if final["TP"] is None and measured["TP"] is not None:
+        raise ValueError(f"{role}: Cleanup 出力の True Peak を検証できません")
+    if final["TP"] is not None and final["TP"] > policy.peak_ceiling_dbtp + 0.05:
+        raise ValueError(f"{role}: Cleanup 出力の True Peak が安全上限を超えました")
 
     ctx.make_preview(out, role, bitrate=PREVIEW_BITRATE_CLEANUP)
     ctx.make_peaks(out, role)
@@ -85,8 +84,15 @@ def _process(ctx: StageContext, role: str, params: dict) -> dict:
         "hum_hz": hum,
         "declip_applied": needs_declip,
         "nr_db": min(float(params["nr_max_db"]), 12.0),
-        "loudness_before_gain": measured_i,
+        "loudness_before_gain": measured["I"],
+        "true_peak_before_gain": measured["TP"],
+        "loudness_after_gain": final["I"],
+        "true_peak_after_gain": final["TP"],
+        "requested_gain_db": decision.requested_gain_db,
+        "gain_limit_reasons": list(decision.reasons),
+        "gain_policy": policy.report(),
         "align_gain_db": round(gain_db, 2),
+        "applied_gain_db": float(f"{gain_db:.6f}"),
         "filter_chain": chain,
     }
 
@@ -97,10 +103,23 @@ def run(ctx: StageContext, params: dict) -> dict:
             ctx.speakers,
             pool.map(lambda r: _process(ctx, r, params), ctx.speakers),
         ))
+    reason_labels = {
+        "max_gain": "最大増幅量",
+        "peak_headroom": "ピーク上限",
+        "below_silence_gate": "無音レベル",
+        "loudness_unmeasurable": "音量を測定できません",
+    }
     warnings = []
     for role, rep in results.items():
         if rep["hum_hz"]:
             warnings.append(f"{role}: {rep['hum_hz']}Hz ハムを検出しノッチ適用")
+        if rep["gain_limit_reasons"]:
+            reasons = "、".join(reason_labels[reason] for reason in rep["gain_limit_reasons"])
+            warnings.append(
+                f"{role}: 安全のためゲインを制限 ({reasons})。"
+                f"目標 {rep['gain_policy']['target_lufs']} LUFS / "
+                f"実測 {rep['loudness_after_gain']} LUFS"
+            )
         if abs(rep["align_gain_db"]) > 12:
             warnings.append(
                 f"{role}: ラウドネス整合ゲインが {rep['align_gain_db']:+.1f}dB と大きい。素材レベルを確認"

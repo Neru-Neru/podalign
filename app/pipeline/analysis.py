@@ -123,7 +123,6 @@ def estimate_sync(
        最小二乗でフィット。傾き=ドリフト率、切片=初期オフセット
     """
     warnings: list[str] = []
-    hop = int(sr * ENV_HOP_S)
 
     # --- 1. 粗探索(エンベロープ、素の相互相関 — cross_correlate の docstring 参照) ---
     env_s, env_r = envelope_db(spk, sr), envelope_db(ref, sr)
@@ -253,7 +252,7 @@ def detect_hum(x: np.ndarray, sr: int) -> int | None:
     for f0 in (50, 60):
         hum = band_power(f0, 1.0)
         neighbor = max(band_power(f0 - 8, 3.0), band_power(f0 + 8, 3.0), 1e-18)
-        ratio_db = 10 * np.log10(hum / neighbor)
+        ratio_db = 10 * np.log10(max(hum, 1e-18) / neighbor)
         if ratio_db > 10 and (best is None or ratio_db > best[1]):
             best = (f0, ratio_db)
     return best[0] if best else None
@@ -288,5 +287,5 @@ def compute_peaks(path: str | Path, n_points: int = 2400) -> list[float]:
             )
         carry = buf[n_full * per_bin :]
     if len(carry):
-        peaks.append(float(carry.max()))
+        peaks.append(float(np.max(carry)))
     return [round(p, 4) for p in peaks]

@@ -96,7 +96,7 @@ def _verify(ctx: StageContext, role: str, ref8k) -> dict:
         segment_s=_clamp_segment_s(30.0, corrected, ref8k),
     )
     lags = [seg["lag_ms"] for seg in est.segments if seg.get("used")]
-    max_resid = max(abs(l) for l in lags) if lags else abs(est.offset_s * 1e3)
+    max_resid = max(abs(lag) for lag in lags) if lags else abs(est.offset_s * 1e3)
     return {
         "residual_offset_ms": round(est.offset_s * 1e3, 3),
         "residual_drift_ppm": round(est.drift_ppm, 2),

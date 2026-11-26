@@ -46,6 +46,10 @@ _BUILTIN_PARAMS: dict[str, dict] = {
         "nr_max_db": 12.0,
         "gate_range_db": -12.0,
         "target_lufs": -20.0,
+        "max_gain_db": 12.0,
+        "track_max_gain_db": {},
+        "silence_gate_lufs": -60.0,
+        "peak_ceiling_dbtp": -1.0,
         "deess_intensity": 0.3,
     },
     "dynamics": {
@@ -165,7 +169,7 @@ def update(project_id: str):
 
 
 def list_projects() -> list[dict]:
-    out = []
+    out: list[dict] = []
     if not DATA_DIR.exists():
         return out
     for p in sorted(DATA_DIR.iterdir()):

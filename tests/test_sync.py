@@ -11,7 +11,6 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from app.pipeline import analysis
 from app.pipeline.s1_sync import correction_filters

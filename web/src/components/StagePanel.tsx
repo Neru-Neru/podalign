@@ -64,6 +64,9 @@ const PARAM_LABELS: Record<string, string> = {
   nr_max_db: "ノイズ除去の最大量 (dB)",
   gate_range_db: "ゲートで下げる音量 (dB)",
   target_lufs: "目標音量 (LUFS)",
+  max_gain_db: "最大増幅量 (dB)",
+  silence_gate_lufs: "増幅しない音量のしきい値 (LUFS)",
+  peak_ceiling_dbtp: "整音後の最大ピーク (dBTP)",
   deess_intensity: "歯擦音（サ行）の抑制強度",
   comp1: "コンプレッサー1",
   comp2: "コンプレッサー2",
@@ -121,6 +124,29 @@ function ParamFields({
       })}
     </>
   );
+}
+
+function CleanupFields({ params, speakers, onChange }: {
+  params: Record<string, any>; speakers: string[];
+  onChange: (path: string[], v: unknown) => void;
+}) {
+  const { track_max_gain_db: overrides = {}, ...common } = params;
+  return <>
+    <ParamFields value={{ max_gain_db: 12, silence_gate_lufs: -60,
+      peak_ceiling_dbtp: -1, ...common }} path={[]} onChange={onChange} />
+    {speakers.map(role => <label key={role}>{role} の最大増幅量 (dB)
+      <input type="number" min="0" max="48" step="0.5"
+        value={overrides[role] ?? ""}
+        placeholder={`共通設定: ${params.max_gain_db ?? 12} dB`}
+        onChange={e => {
+          const next = { ...overrides };
+          if (e.target.value === "") delete next[role];
+          else next[role] = Number(e.target.value);
+          onChange(["track_max_gain_db"], next);
+        }} />
+    </label>)}
+    <p className="muted">話者別の欄が空なら共通設定を使用します。安全上限により目標音量に届かない場合があります。</p>
+  </>;
 }
 
 function seconds(value: unknown): string {
@@ -249,7 +275,7 @@ function StageReport({ stage, state }: { stage: string; state: StageState }) {
       <div className="report">
         <table>
           <thead><tr>
-            <th>トラック</th><th>ノイズフロア</th><th>ハム</th><th>NR量</th><th>整合ゲイン</th>
+            <th>トラック</th><th>ノイズフロア</th><th>ハム</th><th>NR量</th><th>整合ゲイン</th><th>整音後音量</th><th>整音後ピーク</th>
           </tr></thead>
           <tbody>
             {Object.entries(r.tracks ?? {}).map(([role, t]: [string, any]) => (
@@ -258,7 +284,10 @@ function StageReport({ stage, state }: { stage: string; state: StageState }) {
                 <td>{t.noise_floor_db} dB</td>
                 <td>{t.hum_hz ? `${t.hum_hz}Hz 除去` : "なし"}</td>
                 <td>{t.nr_db} dB</td>
-                <td>{t.align_gain_db > 0 ? "+" : ""}{t.align_gain_db} dB</td>
+                <td>{t.align_gain_db > 0 ? "+" : ""}{t.align_gain_db} dB
+                  {t.gain_limit_reasons?.length > 0 && " (安全制限)"}</td>
+                <td>{t.loudness_after_gain ?? "—"} LUFS</td>
+                <td>{t.true_peak_after_gain ?? "—"} dBTP</td>
               </tr>
             ))}
           </tbody>
@@ -362,6 +391,10 @@ export default function StagePanel({
               <MixFields params={params}
                 jingleDuration={Number(project.assets.jingle?.probe?.duration ?? 0)}
                 onChange={setParam} />
+            </div>
+          ) : stage === "cleanup" ? (
+            <div className="params">
+              <CleanupFields params={params} speakers={speakerRoles(project)} onChange={setParam} />
             </div>
           ) : Object.keys(params).length > 0 && (
             <div className="params">

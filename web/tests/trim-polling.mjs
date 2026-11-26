@@ -2,10 +2,11 @@ import { build } from 'esbuild';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 // 実ブラウザで入力・ドラッグと、同じ保存設定を返すポーリングを再現する。
 const directory = await mkdtemp(join(tmpdir(), 'podalign-trim-polling-'));
+let server;
 try {
   const bundle = await build({
     stdin: {
@@ -111,6 +112,34 @@ const input = (index, value) => {
   mixProject.stages.mix.params = {};
   renderMix(); await wait(50);
   if (tailInput().value !== '' || !document.body.textContent.includes('従来の長さを維持')) throw Error('legacy Mix must keep its ending until edited');
+  const cleanupProject = { ...project, stage_order: ['cleanup'], stages: {
+    cleanup: stage({ highpass_hz: 80, nr_max_db: 12, gate_range_db: -12, target_lufs: -20, deess_intensity: 0.3 })
+  } };
+  const renderCleanup = () => root.render(<StagePanel key="cleanup" project={structuredClone(cleanupProject)} stage="cleanup" anyRunning={false} onAction={() => {}} />);
+  const capInput = role => [...document.querySelectorAll('label')].find(label => label.textContent === role + ' の最大増幅量 (dB)').querySelector('input');
+  renderCleanup(); await wait(50);
+  if (capInput('speaker_a').value !== '' || capInput('speaker_a').placeholder !== '共通設定: 12 dB') throw Error('legacy Cleanup fallback missing');
+  if (document.body.textContent.includes('speaker_c の最大増幅量')) throw Error('absent speaker cap shown');
+  const setCap = async value => {
+    const element = capInput('speaker_a');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true })); await wait(20);
+  };
+  await setCap('0');
+  renderCleanup(); await wait(50);
+  if (capInput('speaker_a').value !== '0') throw Error('polling reset zero cap');
+  [...document.querySelectorAll('button')].find(b => b.textContent === '実行').click(); await wait(20);
+  if (submitted.params.track_max_gain_db.speaker_a !== 0 || 'speaker_b' in submitted.params.track_max_gain_db) throw Error('individual cap leaked or zero lost');
+  await setCap('');
+  [...document.querySelectorAll('button')].find(b => b.textContent === '実行').click(); await wait(20);
+  if ('speaker_a' in submitted.params.track_max_gain_db) throw Error('clearing override must restore inheritance');
+  if ('track_max_gain_db' in cleanupProject.stages.cleanup.params) throw Error('editing mutated saved settings');
+  cleanupProject.stages.cleanup = { ...cleanupProject.stages.cleanup, effective_status: 'done', report: {
+    tracks: { speaker_a: { noise_floor_db: -60, nr_db: 12, align_gain_db: 12,
+      loudness_after_gain: -42, true_peak_after_gain: -20, gain_limit_reasons: ['max_gain'] } }, warnings: []
+  } };
+  renderCleanup(); await wait(50);
+  if (!document.body.textContent.includes('安全制限') || !document.body.textContent.includes('-42 LUFS')) throw Error('limited output report missing');
   document.getElementById('result').textContent = 'PASS';
 })().catch(error => { document.getElementById('result').textContent = 'FAIL: ' + error.message; });
 ` },
@@ -118,14 +147,32 @@ const input = (index, value) => {
   });
   const html = join(directory, 'test.html');
   await writeFile(html, `<div id="root"></div><pre id="result">RUNNING</pre><script>${bundle.outputFiles[0].text}</script>`);
+  // Serve our fixture over loopback HTTP. Managed browsers may reject file://;
+  // a separate process keeps serving while spawnSync waits for the browser.
+  server = spawn(process.execPath, ['--input-type=module', '-e', `
+    import { createServer } from 'node:http';
+    import { readFile } from 'node:fs/promises';
+    const html = await readFile(process.argv[1]);
+    const server = createServer((req, res) => {
+      if (req.url !== '/test.html') { res.writeHead(404).end(); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(html);
+    });
+    server.listen(0, '127.0.0.1', () => console.log('http://127.0.0.1:' + server.address().port + '/test.html'));
+  `, html], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const url = await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.once('exit', code => reject(Error('fixture server exited: ' + code)));
+    server.stdout.once('data', data => resolve(String(data).trim()));
+  });
   const result = spawnSync(process.env.CHROME_BIN || 'google-chrome', [
     '--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
-    `--user-data-dir=${join(directory, 'profile')}`, '--dump-dom', '--virtual-time-budget=8000', `file://${html}`,
+    `--user-data-dir=${join(directory, 'profile')}`, '--dump-dom', '--virtual-time-budget=8000', url,
   ], { encoding: 'utf8', timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
   if (!result.stdout?.includes('<pre id="result">PASS</pre>')) {
     throw Error(result.stdout?.match(/<pre id="result">(.*?)<\/pre>/)?.[1] || result.error?.message || result.stderr);
   }
-  console.log('PASS: Trim preview and polling; Mix tail edit submits zero and preserves legacy settings.');
+  console.log('PASS: Trim preview and polling; Mix tail edit submits zero and preserves legacy settings; Cleanup caps inherit, preserve zero across polling, and show safety results.');
 } finally {
+  server?.kill();
   await rm(directory, { recursive: true, force: true });
 }

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -84,7 +85,7 @@ def probe(path: str | Path) -> dict:
     if proc.returncode != 0:
         raise FFmpegError(cmd, proc.stderr.decode(errors="replace"))
     info = json.loads(proc.stdout)
-    stream = next((s for s in info.get("streams", []) if "sample_rate" in s), {})
+    stream: dict = next((s for s in info.get("streams", []) if "sample_rate" in s), {})
     fmt = info.get("format", {})
     duration = float(stream.get("duration") or fmt.get("duration") or 0.0)
     try:
@@ -151,7 +152,7 @@ def stream_f32(
 
 _EBUR_I = re.compile(r"I:\s+(-?[\d.]+)\s+LUFS")
 _EBUR_LRA = re.compile(r"LRA:\s+(-?[\d.]+)\s+LU")
-_EBUR_PEAK = re.compile(r"Peak:\s+(-?[\d.]+)\s+dBFS")
+_EBUR_PEAK = re.compile(r"Peak:\s+(-?[\d.]+|-inf|inf|nan)\s+dBFS")
 
 
 def measure_ebur128(path: str | Path, extra_filters: str = "") -> dict:
@@ -170,10 +171,13 @@ def measure_ebur128(path: str | Path, extra_filters: str = "") -> dict:
     )
     if not m_i:
         raise FFmpegError(["ebur128", str(path)], stderr)
+    peak = float(m_tp.group(1)) if m_tp else None
+    if peak is not None and (math.isnan(peak) or peak == math.inf):
+        raise FFmpegError(["ebur128", str(path)], stderr)
     return {
         "I": float(m_i.group(1)),
         "LRA": float(m_lra.group(1)) if m_lra else None,
-        "TP": float(m_tp.group(1)) if m_tp else None,
+        "TP": peak if peak is not None and math.isfinite(peak) else None,
     }
 
 

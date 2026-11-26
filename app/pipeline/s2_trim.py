@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TypedDict
 
 from . import ffmpeg
 from .base import StageContext
@@ -24,9 +25,21 @@ def _number(value: object, name: str) -> float:
     return value
 
 
+class TrimBounds(TypedDict):
+    requested_start_s: float
+    requested_end_s: float | None
+    start_sample: int
+    end_sample: int
+    start_s: float
+    end_s: float
+    output_length_s: float
+    program_length_s: float
+    program_length_samples: int
+
+
 def resolve_bounds(
     params: dict, program_length_samples: int, sr: int = SR
-) -> dict[str, float | int]:
+) -> TrimBounds:
     """Trim の指定を検証し、48kHzサンプル境界へ丸めて返す。
 
     ``end_s=None`` は Sync の全長を意味する。丸め後にも境界を検証するため、
@@ -119,7 +132,7 @@ def run(ctx: StageContext, params: dict) -> dict:
     if max(lengths.values()) - min(lengths.values()) > 2 / SR:
         raise ValueError("Trim の全トラックの出力長が一致しません")
 
-    report = {
+    report: dict = {
         "sample_rate": SR,
         "requested_start_s": bounds["requested_start_s"],
         "requested_end_s": bounds["requested_end_s"],

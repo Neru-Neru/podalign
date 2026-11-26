@@ -27,7 +27,7 @@ def _non_negative_seconds(value: object, name: str) -> float:
     return result
 
 
-def resolve_timing(params: dict, jingle_duration_s: float, voice_duration_s: float) -> dict[str, float | None]:
+def resolve_timing(params: dict, jingle_duration_s: float, voice_duration_s: float) -> dict[str, float]:
     """開始位置と話者終了後のBGM余韻から絶対時刻を解決する。"""
     jingle_duration_s = _non_negative_seconds(jingle_duration_s, "ジングル長")
     voice_duration_s = _non_negative_seconds(voice_duration_s, "話者バス長")

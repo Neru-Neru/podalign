@@ -200,3 +200,5 @@ podalign as a network service to others.
 
 The Docker image additionally bundles **ffmpeg with librubberband (GPL)**;
 see [NOTICE](NOTICE) for the required attribution and source availability.
+
+Cleanup gain safety and reproducible A/B checks: [docs/audio-safety.md](docs/audio-safety.md).
