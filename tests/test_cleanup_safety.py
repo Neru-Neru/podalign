@@ -75,3 +75,27 @@ def test_metrics_use_known_reference_and_fixed_mask():
     assert a["speech_band_change_db"] == pytest.approx(-6.0206, abs=0.01)
     assert a["si_sdr_db"] > 100
     assert b["si_sdr_db"] == pytest.approx(10, abs=0.3)
+
+
+@pytest.mark.parametrize('mode', ['off', 'auto', 'light', 'medium'])
+def test_complete_cleanup_with_nr_selection(data_dir, monkeypatch, mode):
+    doc = prj.create_project('NR一気通貫')
+    doc['assets']['speaker_a'] = {}
+    directory = storage.stage_dir(doc['id'], 'trim')
+    directory.mkdir(parents=True)
+    clean, speech = synthetic_speech(seed=11)
+    write_float(directory/'input.wav', add_noise(clean, speech, 15, seed=12))
+    ffmpeg.run(['-i', str(directory/'input.wav'), *ffmpeg.FLAC24, str(directory/'speaker_a.flac')])
+    ctx = StageContext(doc['id'], 'cleanup', doc)
+    monkeypatch.setattr(ctx, 'make_preview', lambda *args, **kwargs: None)
+    monkeypatch.setattr(ctx, 'make_peaks', lambda *args: None)
+    # Per-track override must work even when the common setting is legacy.
+    params = {**prj.DEFAULT_PARAMS['cleanup'], 'track_denoise_mode': {'speaker_a': mode}}
+    report = s2_cleanup.run(ctx, params)
+    track = report['tracks']['speaker_a']
+    assert track['denoise']['requested_mode'] == mode
+    assert not track['denoise']['quality']['suspected']
+    assert track['true_peak_after_gain'] <= -1
+    assert len(ffmpeg.decode_f32(ctx.out_dir/'speaker_a.flac', rate=48000)) == len(clean)
+    assert not list(ctx.out_dir.glob('_*.wav'))
+    json.dumps(report, allow_nan=False)

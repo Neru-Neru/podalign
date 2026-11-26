@@ -1,10 +1,13 @@
 {
   "ingest": {},
-  "sync": { "drift_threshold_ppm": 5.0, "n_segments": 10, "segment_s": 30.0 },
+  "sync": { "drift_threshold_ppm": 5.0, "n_segments": 10, "segment_s": 30.0, "anchor_mode": "uniform", "fit_method": "theil_sen", "resample_method": "rubberband", "manual_offsets_ms": {}, "allow_low_confidence": false },
   "trim": { "start_s": 0.0, "end_s": null },
   "cleanup": {
     "highpass_hz": 80,
     "nr_max_db": 12.0,
+    "denoise_mode": "legacy",
+    "track_denoise_mode": {},
+    "speech_band_protection": true,
     "gate_range_db": -12.0,
     "target_lufs": -20.0,
     "max_gain_db": 12.0,

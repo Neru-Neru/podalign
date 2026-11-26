@@ -140,6 +140,31 @@ const input = (index, value) => {
   } };
   renderCleanup(); await wait(50);
   if (!document.body.textContent.includes('安全制限') || !document.body.textContent.includes('-42 LUFS')) throw Error('limited output report missing');
+  const nrSelect = [...document.querySelectorAll('label')].find(label => label.textContent.includes('ノイズ除去モード')).querySelector('select');
+  nrSelect.value = 'auto'; nrSelect.dispatchEvent(new Event('change', { bubbles: true })); await wait(20);
+  const trackNr = [...document.querySelectorAll('label')].find(label => label.textContent.startsWith('speaker_b のノイズ除去')).querySelector('select');
+  trackNr.value = 'off'; trackNr.dispatchEvent(new Event('change', { bubbles: true })); await wait(20);
+  [...document.querySelectorAll('button')].find(b => b.textContent === '再実行').click(); await wait(20);
+  if (submitted.params.denoise_mode !== 'auto' || submitted.params.track_denoise_mode.speaker_b !== 'off') throw Error('NR selection lost');
+  const syncProject = { ...project, stage_order: ['sync'], stages: { sync: {
+    ...stage({ drift_threshold_ppm: 5, n_segments: 10, segment_s: 30 }), effective_status: 'done',
+    report: { approval_blocked: true, segments: { speaker_a: [{ t: 10, lag_ms: 1, confidence: 20, used: true }] },
+      offsets_ms: { speaker_a: 1 }, drift_ppm: { speaker_a: 0 }, drift_corrected: { speaker_a: false },
+      residual_ms: { speaker_a: null } }
+  } } };
+  const renderSync = () => root.render(<StagePanel key="sync" project={structuredClone(syncProject)} stage="sync" anyRunning={false} onAction={() => {}} />);
+  renderSync(); await wait(50);
+  const approval = [...document.querySelectorAll('button')].find(b => b.textContent === '承認して次へ');
+  if (!approval.disabled || !document.querySelector('[role="alert"]')) throw Error('unsafe sync approval not blocked');
+  const resampler = [...document.querySelectorAll('label')].find(label => label.textContent.includes('ドリフト補正方式')).querySelector('select');
+  resampler.value = 'polyphase'; resampler.dispatchEvent(new Event('change', { bubbles: true })); await wait(20);
+  const offset = [...document.querySelectorAll('label')].find(label => label.textContent === 'speaker_a の手動オフセット (ms)').querySelector('input');
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(offset, '0');
+  offset.dispatchEvent(new Event('input', { bubbles: true })); await wait(20);
+  renderSync(); await wait(20);
+  [...document.querySelectorAll('button')].find(b => b.textContent === '再実行').click(); await wait(20);
+  if (submitted.params.resample_method !== 'polyphase' || submitted.params.manual_offsets_ms.speaker_a !== 0) throw Error('sync choices or zero offset lost');
+  if (submitted.params.allow_low_confidence) throw Error('unsafe override enabled implicitly');
   document.getElementById('result').textContent = 'PASS';
 })().catch(error => { document.getElementById('result').textContent = 'FAIL: ' + error.message; });
 ` },
@@ -171,7 +196,7 @@ const input = (index, value) => {
   if (!result.stdout?.includes('<pre id="result">PASS</pre>')) {
     throw Error(result.stdout?.match(/<pre id="result">(.*?)<\/pre>/)?.[1] || result.error?.message || result.stderr);
   }
-  console.log('PASS: Trim preview and polling; Mix tail edit submits zero and preserves legacy settings; Cleanup caps inherit, preserve zero across polling, and show safety results.');
+  console.log('PASS: Trim preview and polling; Mix tail edit submits zero and preserves legacy settings; Cleanup caps inherit, preserve zero across polling, and show safety results; NR selection and blocked Sync approval with zero manual offsets.');
 } finally {
   server?.kill();
   await rm(directory, { recursive: true, force: true });

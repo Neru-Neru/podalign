@@ -37,13 +37,16 @@ def asset_roles(doc: dict) -> list[str]:
 
 _BUILTIN_PARAMS: dict[str, dict] = {
     "ingest": {},
-    "sync": {"drift_threshold_ppm": 5.0, "n_segments": 10, "segment_s": 30.0},
+    "sync": {"drift_threshold_ppm": 5.0, "n_segments": 10, "segment_s": 30.0, "anchor_mode": "uniform", "fit_method": "theil_sen", "resample_method": "rubberband", "manual_offsets_ms": {}, "allow_low_confidence": False},
     # end_s は Sync の program_length_samples を意味する動的既定値。Sync 実行前には
     # 長さが分からないため null で保存し、Trim 実行時に解決する。
     "trim": {"start_s": 0.0, "end_s": None},
     "cleanup": {
         "highpass_hz": 80,
         "nr_max_db": 12.0,
+        "denoise_mode": "legacy",
+        "track_denoise_mode": {},
+        "speech_band_protection": True,
         "gate_range_db": -12.0,
         "target_lufs": -20.0,
         "max_gain_db": 12.0,

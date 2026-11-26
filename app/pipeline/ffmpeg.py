@@ -12,6 +12,7 @@ import math
 import re
 import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 
@@ -207,3 +208,23 @@ def measure_astats(path: str | Path) -> dict:
             except ValueError:
                 pass
     return out
+
+
+@lru_cache(maxsize=16)
+def filter_latency(chain: str, rate: int) -> int:
+    """Measure installed FFmpeg's delay with an isolated impulse, not a guess."""
+    x = np.zeros(rate // 2, dtype=np.float32)
+    position = rate // 8
+    x[position] = 0.5
+    proc = subprocess.run(
+        [FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-f", "f32le", "-ar", str(rate),
+         "-ac", "1", "-i", "-", "-af", chain, "-f", "f32le", "-"],
+        input=x.tobytes(), capture_output=True, check=False,
+    )
+    y = np.frombuffer(proc.stdout, dtype=np.float32)
+    if proc.returncode or not y.size or not np.all(np.isfinite(y)) or np.max(np.abs(y)) < .01:
+        raise FFmpegError(["latency", chain], proc.stderr.decode(errors="replace"))
+    delay = int(np.argmax(np.abs(y))) - position
+    if not 0 <= delay <= rate // 5:
+        raise ValueError("FFmpegフィルタの遅延を安全に校正できません")
+    return delay
